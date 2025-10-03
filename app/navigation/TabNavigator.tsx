@@ -3,7 +3,7 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme/theme';
+import { colors, fonts } from '../theme/theme';
 
 // Import our screens
 import CameraScreen from '../screens/CameraScreen';
@@ -24,15 +24,22 @@ export default function TabNavigator() {
             initialRouteName="Camera" // The Camera is the central, default screen [cite: 47, 112]
             screenOptions={{
                 headerShown: false, // We will handle headers on a per-screen basis later
-                tabBarShowLabel: false,
+                tabBarShowLabel: true,
                 tabBarStyle: {
                     backgroundColor: colors.background,
                     borderTopColor: colors.primary,
                     borderTopWidth: 0.5,
-                    height: 85,
+                    paddingTop: 10,
+                    paddingBottom: 10,
+                    height: 90
                 },
                 tabBarActiveTintColor: colors.primary,
                 tabBarInactiveTintColor: colors.lightGray,
+                tabBarLabelStyle: {
+                    fontFamily: fonts.heading,
+                    fontSize: 10,
+                    marginTop: -5,
+                },
             }}
         >
             <Tab.Screen
@@ -48,6 +55,7 @@ export default function TabNavigator() {
                 name="Camera"
                 component={CameraScreen}
                 options={{
+                    tabBarLabel: '',
                     tabBarIcon: () => <CustomCameraButton />,
                 }}
             />
@@ -68,17 +76,19 @@ const styles = StyleSheet.create({
     cameraButtonContainer: {
         width: 60,
         height: 60,
-        borderRadius: 30,
+        borderRadius: 32.5,
         backgroundColor: colors.primary,
         justifyContent: 'center',
         alignItems: 'center',
         // This 'translateY' is what gives it the "floating" effect
-        transform: [{ translateY: -25 }],
+        transform: [{ translateY: -30 }],
         // Add a glow effect
         shadowColor: colors.primary,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.7,
         shadowRadius: 10,
         elevation: 10,
+        borderWidth: 3,
+        borderColor: colors.background
     },
 });
