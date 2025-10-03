@@ -1,5 +1,6 @@
 // In app/navigation/TabNavigator.tsx
 import React from 'react';
+import { View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/theme';
@@ -11,6 +12,12 @@ import ProfileScreen from '../screens/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
 
+const CustomCameraButton = () => (
+    <View style={styles.cameraButtonContainer}>
+        <Ionicons name="scan-outline" color={colors.background} size={32} />
+    </View>
+);
+
 export default function TabNavigator() {
     return (
         <Tab.Navigator
@@ -21,8 +28,8 @@ export default function TabNavigator() {
                 tabBarStyle: {
                     backgroundColor: colors.background,
                     borderTopColor: colors.primary,
-                    borderTopWidth: 1,
-                    height: 90,
+                    borderTopWidth: 0.5,
+                    height: 85,
                 },
                 tabBarActiveTintColor: colors.primary,
                 tabBarInactiveTintColor: colors.lightGray,
@@ -41,10 +48,7 @@ export default function TabNavigator() {
                 name="Camera"
                 component={CameraScreen}
                 options={{
-                    tabBarIcon: ({ color, size }) => (
-                        // Make the center camera icon larger for emphasis
-                        <Ionicons name="camera-outline" color={color} size={size * 1.5} />
-                    ),
+                    tabBarIcon: () => <CustomCameraButton />,
                 }}
             />
             <Tab.Screen
@@ -59,3 +63,22 @@ export default function TabNavigator() {
         </Tab.Navigator>
     );
 }
+
+const styles = StyleSheet.create({
+    cameraButtonContainer: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: colors.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+        // This 'translateY' is what gives it the "floating" effect
+        transform: [{ translateY: -25 }],
+        // Add a glow effect
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.7,
+        shadowRadius: 10,
+        elevation: 10,
+    },
+});

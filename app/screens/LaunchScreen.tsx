@@ -1,11 +1,20 @@
 // In app/screens/LaunchScreen.tsx
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts } from '../theme/theme';
 
-export default function LaunchScreen() {
+export default function LaunchScreen({ navigation }: any) {
+    // This effect will run once when the screen loads
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            navigation.replace('Login'); // Use .replace to prevent user from going back to launch
+        }, 2500); // 2.5 seconds
+
+        return () => clearTimeout(timer); // Cleanup timer on unmount
+    }, [navigation]);
+
     return (
         <SafeAreaView style={styles.container}>
             {/* Top Header */}
