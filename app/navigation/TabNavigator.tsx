@@ -2,6 +2,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import CustomTabBar from './CustomTabBar';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts } from '../theme/theme';
 
@@ -21,25 +22,9 @@ const CustomCameraButton = () => (
 export default function TabNavigator() {
     return (
         <Tab.Navigator
-            initialRouteName="Camera" // The Camera is the central, default screen [cite: 47, 112]
+            tabBar={(props) => <CustomTabBar {...props} />}
             screenOptions={{
-                headerShown: false, // We will handle headers on a per-screen basis later
-                tabBarShowLabel: true,
-                tabBarStyle: {
-                    backgroundColor: colors.background,
-                    borderTopColor: colors.primary,
-                    borderTopWidth: 0.5,
-                    paddingTop: 10,
-                    paddingBottom: 10,
-                    height: 90
-                },
-                tabBarActiveTintColor: colors.primary,
-                tabBarInactiveTintColor: colors.lightGray,
-                tabBarLabelStyle: {
-                    fontFamily: fonts.heading,
-                    fontSize: 10,
-                    marginTop: -5,
-                },
+                headerShown: false,
             }}
         >
             <Tab.Screen
@@ -74,8 +59,8 @@ export default function TabNavigator() {
 
 const styles = StyleSheet.create({
     cameraButtonContainer: {
-        width: 60,
-        height: 60,
+        width: 65,
+        height: 65,
         borderRadius: 32.5,
         backgroundColor: colors.primary,
         justifyContent: 'center',
