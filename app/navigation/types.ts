@@ -3,8 +3,8 @@ import { NavigatorScreenParams } from '@react-navigation/native';
 
 // Defines the screens available in the bottom tab navigator
 export type TabParamList = {
-    Museum: undefined;
     Camera: undefined;
+    Museum: undefined;
     Profile: undefined;
 };
 
