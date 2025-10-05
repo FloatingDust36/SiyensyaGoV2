@@ -23,7 +23,18 @@ const SECTIONS = [
 export default function LearningContentScreen() {
     const route = useRoute<LearningContentRouteProp>();
     const navigation = useNavigation<NavigationProp>();
-    const { imageUri, result } = route.params;
+
+    // Safely extract params with defaults
+    const imageUri = route.params?.imageUri || '';
+    const result = route.params?.result || {
+        objectName: 'Unknown Object',
+        confidence: 0,
+        funFact: 'No information available.',
+        the_science_in_action: 'No information available.',
+        why_it_matters_to_you: 'No information available.',
+        tryThis: 'No information available.',
+        explore_further: 'No information available.',
+    };
 
     const [currentSection, setCurrentSection] = useState(0);
     const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -46,10 +57,19 @@ export default function LearningContentScreen() {
     };
 
     const section = SECTIONS[currentSection];
+
+    // Safely extract content
     const rawContent = result[section.key as keyof AnalysisResult];
-    const content = (typeof rawContent === 'string' || typeof rawContent === 'number')
-        ? String(rawContent)
-        : 'No content available.';
+    let content = 'No content available.';
+
+    if (rawContent !== undefined && rawContent !== null) {
+        if (typeof rawContent === 'string') {
+            content = rawContent;
+        } else if (typeof rawContent === 'number') {
+            content = String(rawContent);
+        }
+    }
+
     const progress = ((currentSection + 1) / SECTIONS.length) * 100;
 
     return (
@@ -60,10 +80,14 @@ export default function LearningContentScreen() {
                     <Ionicons name="close" size={28} color={colors.lightGray} />
                 </TouchableOpacity>
                 <View style={styles.headerCenter}>
-                    <Text style={styles.objectName} numberOfLines={1}>{result.objectName}</Text>
-                    <Text style={styles.progressText}>{currentSection + 1} of {SECTIONS.length}</Text>
+                    <Text style={styles.objectName} numberOfLines={1}>
+                        {result.objectName}
+                    </Text>
+                    <Text style={styles.progressText}>
+                        {currentSection + 1} of {SECTIONS.length}
+                    </Text>
                 </View>
-                <View style={styles.headerButton} /> {/* Spacer */}
+                <View style={styles.headerButton} />
             </View>
 
             {/* Progress Bar */}

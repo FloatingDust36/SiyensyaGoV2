@@ -30,9 +30,12 @@ export async function analyzeImageWithGemini(imageUri: string, userGradeLevel: s
             You are "SiyensyaGo," an AI science educator for Filipino students. Your tone is enthusiastic, encouraging, and fun.
             Analyze the image and identify the main object.
             
-            Your entire response MUST be a single, valid JSON object following this exact structure:
+            CRITICAL: Your response must ONLY be a valid JSON object. Do not include any text before or after the JSON.
+            Do not include markdown code fences like \`\`\`json.
+            
+            Respond with ONLY this JSON structure:
             {
-              "objectName": "Name of the object (e.g., 'A Kalesa').",
+              "objectName": "Name of the object (e.g., 'Kalesa').",
               "confidence": <A number from 0-100 indicating your confidence in the identification>,
               "funFact": "A surprising and memorable 'Alam mo ba?' (Did you know?) fact about the object or concept. Make it short and catchy.",
               "the_science_in_action": "A simple, clear explanation of the core scientific concept for a '${userGradeLevel}' student. Align with the Philippine DepEd curriculum.",
@@ -46,21 +49,31 @@ export async function analyzeImageWithGemini(imageUri: string, userGradeLevel: s
         const response = result.response;
         const text = response.text();
 
-        console.log("Gemini Response Text:", text);
+        console.log("Gemini Response (first 100 chars):", text.substring(0, 100) + "...");
+
+        // Remove markdown code fences if present
+        let cleanedText = text.trim();
+        cleanedText = cleanedText.replace(/```json\s*/g, '');
+        cleanedText = cleanedText.replace(/```\s*/g, '');
+
         // Find the start of the JSON object
-        const jsonStart = text.indexOf('{');
+        const jsonStart = cleanedText.indexOf('{');
         // Find the end of the JSON object
-        const jsonEnd = text.lastIndexOf('}') + 1;
+        const jsonEnd = cleanedText.lastIndexOf('}') + 1;
 
         if (jsonStart === -1 || jsonEnd === 0) {
+            console.error("No valid JSON found. Response:", text);
             throw new Error("No valid JSON object found in the Gemini response.");
         }
 
         // Extract just the JSON string
-        const jsonString = text.substring(jsonStart, jsonEnd);
+        const jsonString = cleanedText.substring(jsonStart, jsonEnd);
 
         // Parse the extracted string
-        return JSON.parse(jsonString);
+        const parsed = JSON.parse(jsonString);
+        console.log("✓ Successfully parsed:", parsed.objectName);
+        return parsed;
+
     } catch (error) {
         console.error('Error analyzing image with Gemini:', error);
         return { error: `Failed to analyze image. ${error instanceof Error ? error.message : String(error)}` };

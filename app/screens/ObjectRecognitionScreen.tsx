@@ -47,7 +47,17 @@ export default function ObjectRecognitionScreen() {
 
     const handleConfirm = () => {
         if (result) {
-            navigation.replace('LearningContent', { imageUri, result });
+            // Ensure all required properties exist
+            const safeResult: AnalysisResult = {
+                objectName: String(result.objectName || 'Unknown Object'),
+                confidence: Number(result.confidence || 0),
+                funFact: String(result.funFact || 'No information available.'),
+                the_science_in_action: String(result.the_science_in_action || 'No information available.'),
+                why_it_matters_to_you: String(result.why_it_matters_to_you || 'No information available.'),
+                tryThis: String(result.tryThis || 'No information available.'),
+                explore_further: String(result.explore_further || 'No information available.'),
+            };
+            navigation.replace('LearningContent', { imageUri, result: safeResult });
         }
     };
 
