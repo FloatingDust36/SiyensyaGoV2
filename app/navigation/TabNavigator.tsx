@@ -1,10 +1,9 @@
 // In app/navigation/TabNavigator.tsx
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import CustomTabBar from './CustomTabBar';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts } from '../theme/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; // Import the hook
 
 // Import our screens
 import CameraScreen from '../screens/CameraScreen';
@@ -13,18 +12,31 @@ import ProfileScreen from '../screens/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
 
-const CustomCameraButton = () => (
-    <View style={styles.cameraButtonContainer}>
-        <Ionicons name="scan-outline" color={colors.background} size={32} />
-    </View>
-);
-
 export default function TabNavigator() {
+    // Get bottom safe area inset
+    const insets = useSafeAreaInsets();
+
     return (
         <Tab.Navigator
-            tabBar={(props) => <CustomTabBar {...props} />}
+            initialRouteName="Camera"
             screenOptions={{
                 headerShown: false,
+                tabBarActiveTintColor: colors.primary,
+                tabBarInactiveTintColor: colors.lightGray,
+                tabBarStyle: {
+                    backgroundColor: colors.background,
+                    borderTopColor: 'rgba(0, 191, 255, 0.2)',
+                    height: 70 + insets.bottom,
+                    paddingTop: 5,
+                },
+                tabBarLabelStyle: {
+                    fontFamily: fonts.heading,
+                    fontSize: 10,
+                    paddingBottom: 5,
+                },
+                tabBarIconStyle: {
+                    paddingTop: 5,
+                }
             }}
         >
             <Tab.Screen
@@ -40,8 +52,9 @@ export default function TabNavigator() {
                 name="Camera"
                 component={CameraScreen}
                 options={{
-                    tabBarLabel: '',
-                    tabBarIcon: () => <CustomCameraButton />,
+                    tabBarIcon: ({ color, size }) => (
+                        <Ionicons name="camera-outline" color={color} size={size * 1.1} />
+                    ),
                 }}
             />
             <Tab.Screen
@@ -56,24 +69,3 @@ export default function TabNavigator() {
         </Tab.Navigator>
     );
 }
-
-const styles = StyleSheet.create({
-    cameraButtonContainer: {
-        width: 65,
-        height: 65,
-        borderRadius: 32.5,
-        backgroundColor: colors.primary,
-        justifyContent: 'center',
-        alignItems: 'center',
-        // This 'translateY' is what gives it the "floating" effect
-        transform: [{ translateY: -30 }],
-        // Add a glow effect
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.7,
-        shadowRadius: 10,
-        elevation: 10,
-        borderWidth: 3,
-        borderColor: colors.background
-    },
-});

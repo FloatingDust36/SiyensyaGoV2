@@ -12,13 +12,10 @@ import { colors, fonts } from '../theme/theme';
 type CameraNavigationProp = StackNavigationProp<RootStackParamList, 'MainTabs'>;
 
 export default function CameraScreen() {
-    // This hook now correctly handles everything related to permissions for us.
     const [permission, requestPermission] = useCameraPermissions();
     const cameraRef = useRef<CameraView>(null);
     const navigation = useNavigation<CameraNavigationProp>();
     const isFocused = useIsFocused();
-
-    // NOTE: The complex useEffect with AppState has been removed as the hook handles it.
 
     const handleScan = async () => {
         if (cameraRef.current) {
@@ -58,36 +55,37 @@ export default function CameraScreen() {
     }
 
     return (
-        <View style={styles.container}>
-            {isFocused && (
-                <CameraView style={StyleSheet.absoluteFill} ref={cameraRef} facing="back" />
-            )}
+        <SafeAreaView style={styles.container}>
+            <View style={styles.topBar}>
+                <Text style={styles.promptText}>What do you want to discover today?</Text>
+            </View>
 
-            <SafeAreaView style={styles.overlay}>
-                <View style={styles.topBar}>
-                    <Text style={styles.promptText}>What do you want to discover today?</Text>
+            <View style={styles.cameraContainer}>
+                {isFocused && (
+                    <CameraView style={styles.camera} ref={cameraRef} facing="back" />
+                )}
+                <View style={styles.reticle}>
+                    <View style={[styles.corner, styles.topLeft]} />
+                    <View style={[styles.corner, styles.topRight]} />
+                    <View style={[styles.corner, styles.bottomLeft]} />
+                    <View style={[styles.corner, styles.bottomRight]} />
                 </View>
+            </View>
 
-                <View style={styles.middleContainer}>
-                    <View style={styles.reticle}>
-                        <View style={[styles.corner, styles.topLeft]} />
-                        <View style={[styles.corner, styles.topRight]} />
-                        <View style={[styles.corner, styles.bottomLeft]} />
-                        <View style={[styles.corner, styles.bottomRight]} />
-                    </View>
-                </View>
-            </SafeAreaView>
-        </View>
+            <View style={styles.bottomBar}>
+                <TouchableOpacity style={styles.scanButton} onPress={handleScan}>
+                    <Ionicons name="scan" size={32} color={colors.background} />
+                </TouchableOpacity>
+            </View>
+        </SafeAreaView>
     );
 }
 
-// Styles remain the same
 const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
-        justifyContent: 'center',
-        alignItems: 'center'
+        justifyContent: 'space-between',
     },
     permissionContainer: {
         flex: 1,
@@ -115,15 +113,9 @@ const styles = StyleSheet.create({
         fontFamily: fonts.heading,
         fontSize: 16,
     },
-    overlay: {
-        ...StyleSheet.absoluteFillObject,
-        justifyContent: 'space-between',
-    },
     topBar: {
         padding: 20,
-        paddingTop: 60,
         alignItems: 'center',
-        backgroundColor: 'rgba(13, 15, 24, 0.5)',
     },
     promptText: {
         color: colors.text,
@@ -131,12 +123,22 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         fontFamily: fonts.heading,
     },
-    middleContainer: {
+    cameraContainer: {
         flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginHorizontal: 20,
+    },
+    camera: {
+        width: '100%',
+        aspectRatio: 1, // Creates a square view
+        borderRadius: 20, // Adds rounded corners
+        overflow: 'hidden', // Ensures the camera view respects the border radius
         justifyContent: 'center',
         alignItems: 'center',
     },
     reticle: {
+        position: 'absolute',
         width: 250,
         height: 250,
     },
@@ -151,4 +153,19 @@ const styles = StyleSheet.create({
     topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0 },
     bottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0 },
     bottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0 },
+    bottomBar: {
+        paddingBottom: 25,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    scanButton: {
+        width: 70,
+        height: 70,
+        borderRadius: 35,
+        backgroundColor: colors.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 4,
+        borderColor: colors.background,
+    },
 });
