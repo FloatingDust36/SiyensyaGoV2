@@ -1,6 +1,6 @@
 // In app/screens/ObjectRecognitionScreen.tsx
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, Image, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -17,102 +17,236 @@ export default function ObjectRecognitionScreen() {
     const navigation = useNavigation<NavigationProp>();
     const { imageUri } = route.params;
 
-    const [isLoading, setIsLoading] = useState(true);
+    const [isAnalyzing, setIsAnalyzing] = useState(true);
     const [result, setResult] = useState<AnalysisResult | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         const performAnalysis = async () => {
             if (!imageUri) return;
 
-            const analysisResult: AnalysisResult | { error: string } = await analyzeImageWithGemini(imageUri);
+            // --- REFINEMENT: Ensure a minimum loading time without unnecessary delay ---
+            const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+            // Run the API call and a minimum delay in parallel
+            const [analysisResult] = await Promise.all([
+                analyzeImageWithGemini(imageUri),
+                delay(1500) // Minimum 1.5 seconds loading time
+            ]);
 
             if ('error' in analysisResult) {
-                Alert.alert("Analysis Failed", analysisResult.error, [
-                    { text: "Try Again", onPress: () => navigation.goBack() }
-                ]);
+                setError(analysisResult.error);
             } else {
-                setResult(analysisResult);
-                setIsLoading(false);
-
-                // Automatic progression to learning content after a short delay
-                setTimeout(() => {
-                    navigation.replace('LearningContent', { imageUri, result: analysisResult });
-                }, 1800); // Wait 1.8 seconds to allow user to read the result
+                setResult(analysisResult as AnalysisResult);
             }
+            setIsAnalyzing(false);
         };
 
         performAnalysis();
-    }, [imageUri, navigation]);
+    }, [imageUri]);
 
-    // Renders the initial "Analyzing..." state
-    const renderLoading = () => (
-        <View style={styles.statusContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.statusText}>Analyzing Image...</Text>
-            <Text style={styles.subStatusText}>Identifying scientific concepts</Text>
-        </View>
-    );
-
-    const renderResult = () => {
-        const isConfident = (result?.confidence ?? 0) >= 90;
-        return (
-            <View style={styles.statusContainer}>
-                <Text style={styles.foundTitle}>
-                    {isConfident ? "Here's what I found!" : "Hmm, I think it's a..."}
-                </Text>
-                <Text style={styles.statusText}>{result?.objectName}</Text>
-                <View style={styles.confidenceContainer}>
-                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                    <Text style={styles.confidenceText}>Confidence: {result?.confidence}%</Text>
-                </View>
-            </View>
-        );
+    const handleConfirm = () => {
+        if (result) {
+            navigation.replace('LearningContent', { imageUri, result });
+        }
     };
 
+    const handleRetake = () => {
+        navigation.goBack();
+    };
+
+    // Error State
+    if (error) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={[styles.content, { justifyContent: 'center' }]}>
+                    <Ionicons name="alert-circle-outline" size={80} color={colors.warning} />
+                    <Text style={styles.errorTitle}>Analysis Failed</Text>
+                    <Text style={styles.errorText}>{error}</Text>
+                    <TouchableOpacity style={styles.retakeButton} onPress={handleRetake}>
+                        <Ionicons name="camera-outline" size={24} color={colors.background} />
+                        <Text style={styles.retakeButtonText}>Try Again</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    // Main View
     return (
-        // --- FIX: Use SafeAreaView with a background color instead of ImageBackground ---
         <SafeAreaView style={styles.container}>
             <View style={styles.content}>
-                {/* --- FIX: The Image is now its own component --- */}
                 <Image source={{ uri: imageUri }} style={styles.image} />
 
-                {isLoading ? renderLoading() : renderResult()}
+                {isAnalyzing ? (
+                    <View style={styles.statusContainer}>
+                        <ActivityIndicator size="large" color={colors.primary} />
+                        <Text style={styles.statusText}>Analyzing...</Text>
+                        <Text style={styles.subStatusText}>Connecting to SiyensyaGo AI</Text>
+                    </View>
+                ) : (
+                    <View style={styles.statusContainer}>
+                        <Text style={styles.promptText}>{(result?.confidence ?? 0) >= 75 ? "I found:" : "I think this is:"}</Text>
+                        <Text style={styles.objectName}>{result?.objectName}</Text>
+                        <View style={styles.confidenceContainer}>
+                            <Ionicons name={(result?.confidence ?? 0) >= 75 ? "checkmark-circle" : "help-circle"} size={24} color={(result?.confidence ?? 0) >= 75 ? colors.success : colors.warning} />
+                            <Text style={[styles.confidenceText, { color: (result?.confidence ?? 0) >= 75 ? colors.success : colors.warning }]}>
+                                {result?.confidence}% confident
+                            </Text>
+                        </View>
+                    </View>
+                )}
             </View>
-            <View style={styles.footer}>
-                <Text style={styles.footerText}>SiyensyaGo AI</Text>
-            </View>
+
+            {!isAnalyzing && (
+                <View style={styles.footer}>
+                    <Text style={styles.confirmPrompt}>Is this correct?</Text>
+                    <View style={styles.buttonContainer}>
+                        <TouchableOpacity style={styles.noButton} onPress={handleRetake}>
+                            <Ionicons name="close" size={24} color={colors.warning} />
+                            <Text style={styles.noButtonText}>No</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.yesButton} onPress={handleConfirm}>
+                            <Ionicons name="checkmark" size={24} color={colors.background} />
+                            <Text style={styles.yesButtonText}>Yes!</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
         </SafeAreaView>
     );
 }
 
+// --- REFINED STYLES ---
 const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
-        justifyContent: 'space-between',
     },
     content: {
         flex: 1,
+        justifyContent: 'center', // This centers the content vertically
         alignItems: 'center',
         padding: 20,
     },
     image: {
-        width: '100%',
-        height: '50%', // Give the image a defined size
-        borderRadius: 15,
-        marginBottom: 30,
+        width: '90%', // Use a percentage for responsiveness
+        aspectRatio: 1, // Keep it square
+        borderRadius: 20,
+        marginBottom: 40, // Add space between image and text
+        borderWidth: 3, // Add the border
+        borderColor: 'rgba(0, 191, 255, 0.5)', // Thematic border color
     },
     statusContainer: {
-        flex: 1,
-        justifyContent: 'center',
         alignItems: 'center',
-        gap: 15
+        gap: 10,
     },
-    statusText: { fontFamily: fonts.heading, color: colors.primary, fontSize: 36, textAlign: 'center' },
-    subStatusText: { fontFamily: fonts.body, color: colors.lightGray, fontSize: 16 },
-    footer: { paddingBottom: 40, alignItems: 'center' },
-    footerText: { fontFamily: fonts.body, color: colors.lightGray, fontSize: 14, opacity: 0.7 },
-    foundTitle: { fontFamily: fonts.body, color: colors.text, fontSize: 18, marginBottom: 10 },
-    confidenceContainer: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
-    confidenceText: { fontFamily: fonts.heading, color: colors.success, fontSize: 16 },
+    statusText: {
+        fontFamily: fonts.heading,
+        color: colors.primary,
+        fontSize: 28,
+    },
+    subStatusText: {
+        fontFamily: fonts.body,
+        color: colors.lightGray,
+        fontSize: 16,
+    },
+    promptText: {
+        fontFamily: fonts.body,
+        color: colors.lightGray,
+        fontSize: 18,
+    },
+    objectName: {
+        fontFamily: fonts.heading,
+        color: colors.text,
+        fontSize: 30,
+        textAlign: 'center',
+        marginVertical: 5,
+    },
+    confidenceContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginTop: 5,
+    },
+    confidenceText: {
+        fontFamily: fonts.heading,
+        fontSize: 16,
+    },
+    footer: {
+        paddingHorizontal: 20,
+        paddingBottom: 40,
+    },
+    confirmPrompt: {
+        fontFamily: fonts.heading,
+        color: colors.primary,
+        fontSize: 18,
+        textAlign: 'center',
+        marginBottom: 15,
+    },
+    buttonContainer: {
+        flexDirection: 'row',
+        gap: 15,
+    },
+    noButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        paddingVertical: 18,
+        borderRadius: 30,
+        borderWidth: 2,
+        borderColor: colors.warning,
+    },
+    noButtonText: {
+        fontFamily: fonts.heading,
+        color: colors.warning,
+        fontSize: 18,
+    },
+    yesButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        paddingVertical: 18,
+        borderRadius: 30,
+        backgroundColor: colors.primary,
+    },
+    yesButtonText: {
+        fontFamily: fonts.heading,
+        color: colors.background,
+        fontSize: 18,
+    },
+    // Error state styles
+    errorTitle: {
+        fontFamily: fonts.heading,
+        color: colors.warning,
+        fontSize: 28,
+        marginTop: 20,
+        marginBottom: 10,
+    },
+    errorText: {
+        fontFamily: fonts.body,
+        color: colors.lightGray,
+        fontSize: 16,
+        textAlign: 'center',
+        paddingHorizontal: 20,
+    },
+    retakeButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingVertical: 18,
+        paddingHorizontal: 40,
+        borderRadius: 30,
+        backgroundColor: colors.primary,
+        marginTop: 30,
+    },
+    retakeButtonText: {
+        fontFamily: fonts.heading,
+        color: colors.background,
+        fontSize: 18,
+    },
 });

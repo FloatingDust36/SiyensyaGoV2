@@ -6,7 +6,7 @@ const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 if (!API_KEY) throw new Error('Gemini API key not set');
 
 const genAI = new GoogleGenerativeAI(API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
+const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
 async function fileToGenerativePart(uri: string): Promise<Part> {
     const base64Data = await readAsStringAsync(uri, {
@@ -47,9 +47,20 @@ export async function analyzeImageWithGemini(imageUri: string, userGradeLevel: s
         const text = response.text();
 
         console.log("Gemini Response Text:", text);
-        const cleanedText = text.replace(/```json\n|```/g, '').trim();
-        return JSON.parse(cleanedText);
+        // Find the start of the JSON object
+        const jsonStart = text.indexOf('{');
+        // Find the end of the JSON object
+        const jsonEnd = text.lastIndexOf('}') + 1;
 
+        if (jsonStart === -1 || jsonEnd === 0) {
+            throw new Error("No valid JSON object found in the Gemini response.");
+        }
+
+        // Extract just the JSON string
+        const jsonString = text.substring(jsonStart, jsonEnd);
+
+        // Parse the extracted string
+        return JSON.parse(jsonString);
     } catch (error) {
         console.error('Error analyzing image with Gemini:', error);
         return { error: `Failed to analyze image. ${error instanceof Error ? error.message : String(error)}` };
