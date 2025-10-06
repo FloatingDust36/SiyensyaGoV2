@@ -110,10 +110,7 @@ export default function MuseumScreen() {
             {/* Content Area */}
             {discoveryCount === 0 ? (
                 // Empty State
-                <View style={styles.emptyState}>
-                    <View style={styles.emptyIconContainer}>
-                        <Ionicons name="telescope-outline" size={80} color={colors.primary} style={{ opacity: 0.3 }} />
-                    </View>
+                <View style={styles.emptyState} pointerEvents="box-none">
                     <Text style={styles.emptyTitle}>Your Museum is Empty</Text>
                     <Text style={styles.emptySubtitle}>
                         Start scanning objects to build your personal STEM collection!
@@ -188,7 +185,7 @@ const styles = StyleSheet.create({
     },
     title: {
         fontFamily: fonts.heading,
-        fontSize: 28,
+        fontSize: 25,
         color: colors.text,
     },
     subtitle: {
@@ -259,6 +256,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 40,
+        paddingTop: 20,
     },
     emptyIconContainer: {
         width: 140,
