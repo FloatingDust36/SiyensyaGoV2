@@ -13,7 +13,6 @@ type NavigationProp = StackNavigationProp<RootStackParamList>;
 
 const { width } = Dimensions.get('window');
 
-// Enhanced sections with better icons and descriptions
 const SECTIONS = [
     { key: 'funFact', icon: 'flash', title: 'Alam mo ba?', subtitle: 'Fun Fact', color: colors.secondary },
     { key: 'the_science_in_action', icon: 'flask', title: 'The Science in Action', subtitle: 'How it works', color: colors.primary },

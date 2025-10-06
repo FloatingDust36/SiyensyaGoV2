@@ -22,7 +22,6 @@ export default function ObjectRecognitionScreen() {
     const [error, setError] = useState<string | null>(null);
     const [loadingMessage, setLoadingMessage] = useState('Initializing AI scanner...');
 
-    // ========== ADDED: Animation values ==========
     const scanProgress = useRef(new Animated.Value(0)).current;
     const pulseAnim = useRef(new Animated.Value(1)).current;
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -38,7 +37,6 @@ export default function ObjectRecognitionScreen() {
             scale: new Animated.Value(0),
         }))
     ).current;
-    // ========== END ADDED ==========
 
     useEffect(() => {
         if (isAnalyzing) {
@@ -63,7 +61,7 @@ export default function ObjectRecognitionScreen() {
     }, [isAnalyzing]);
 
     useEffect(() => {
-        // ========== ADDED: Start analyzing animations ==========
+        // Start analyzing animations
         if (isAnalyzing) {
             // Progress bar animation
             Animated.loop(
@@ -167,7 +165,7 @@ export default function ObjectRecognitionScreen() {
             } else {
                 setResult(analysisResult as AnalysisResult);
 
-                // ========== ADDED: Fade in result animation ==========
+                // Fade in result animation
                 Animated.parallel([
                     Animated.timing(fadeAnim, {
                         toValue: 1,
@@ -181,7 +179,6 @@ export default function ObjectRecognitionScreen() {
                         useNativeDriver: true,
                     }),
                 ]).start();
-                // ========== END ADDED ==========
             }
             setIsAnalyzing(false);
         };
@@ -189,7 +186,7 @@ export default function ObjectRecognitionScreen() {
         performAnalysis();
     }, [imageUri]);
 
-    // ========== ADDED: Animation interpolations ==========
+    // Animation interpolations
     const progressWidth = scanProgress.interpolate({
         inputRange: [0, 1],
         outputRange: ['0%', '100%'],
@@ -199,7 +196,6 @@ export default function ObjectRecognitionScreen() {
         inputRange: [0, 1],
         outputRange: ['0deg', '360deg'],
     });
-    // ========== END ADDED ==========
 
     const handleConfirm = () => {
         if (result) {
@@ -225,14 +221,14 @@ export default function ObjectRecognitionScreen() {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={[styles.content, { justifyContent: 'center' }]}>
-                    {/* ADDED: Animated error icon */}
+                    {/* Animated error icon */}
                     <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
                         <Ionicons name="alert-circle-outline" size={100} color={colors.warning} />
                     </Animated.View>
                     <Text style={styles.errorTitle}>Analysis Failed</Text>
                     <Text style={styles.errorText}>{error}</Text>
 
-                    {/* ADDED: Error suggestions */}
+                    {/* Error suggestions */}
                     <View style={styles.errorSuggestions}>
                         <Text style={styles.suggestionTitle}>Try these solutions:</Text>
                         <View style={styles.suggestionItem}>
@@ -262,14 +258,14 @@ export default function ObjectRecognitionScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.content}>
-                {/* MODIFIED: Image with border and glow */}
+                {/* Image with border and glow */}
                 <View style={styles.imageContainer}>
                     <Image source={{ uri: imageUri }} style={styles.image} />
                 </View>
 
                 {isAnalyzing ? (
                     <View style={styles.statusContainer}>
-                        {/* ADDED: Particle effects around loading indicator */}
+                        {/* Particle effects around loading indicator */}
                         <View style={styles.particleContainer}>
                             {particleAnims.map((particle, index) => (
                                 <Animated.View
@@ -288,7 +284,7 @@ export default function ObjectRecognitionScreen() {
                                 />
                             ))}
 
-                            {/* MODIFIED: Animated loading indicator */}
+                            {/* Animated loading indicator */}
                             <Animated.View style={{ transform: [{ rotate: spin }] }}>
                                 <Ionicons name="scan-circle-outline" size={60} color={colors.primary} />
                             </Animated.View>
@@ -297,13 +293,13 @@ export default function ObjectRecognitionScreen() {
                         <Text style={styles.statusText}>Analyzing...</Text>
                         <Text style={styles.subStatusText}>{loadingMessage}</Text>
 
-                        {/* ADDED: Progress bar */}
+                        {/* Progress bar */}
                         <View style={styles.progressBarContainer}>
                             <Animated.View style={[styles.progressBar, { width: progressWidth }]} />
                         </View>
                     </View>
                 ) : (
-                    // MODIFIED: Result with fade-in animation
+                    // Result with fade-in animation
                     <Animated.View
                         style={[
                             styles.statusContainer,
@@ -313,14 +309,14 @@ export default function ObjectRecognitionScreen() {
                             }
                         ]}
                     >
-                        {/* ADDED: Success icon with confidence indicator */}
+                        {/* Success icon with confidence indicator */}
                         <View style={styles.resultIconContainer}>
                             <Ionicons
                                 name={(result?.confidence ?? 0) >= 75 ? "checkmark-circle" : "help-circle"}
                                 size={60}
                                 color={(result?.confidence ?? 0) >= 75 ? colors.success : colors.warning}
                             />
-                            {/* ADDED: Confidence ring */}
+                            {/* Confidence ring */}
                             <View style={styles.confidenceRing}>
                                 <Text style={styles.confidencePercentage}>{result?.confidence}%</Text>
                             </View>
@@ -331,7 +327,7 @@ export default function ObjectRecognitionScreen() {
                         </Text>
                         <Text style={styles.objectName}>{result?.objectName}</Text>
 
-                        {/* MODIFIED: Enhanced confidence display */}
+                        {/* Enhanced confidence display */}
                         <View style={styles.confidenceContainer}>
                             <View style={styles.confidenceBadge}>
                                 <Ionicons
@@ -404,7 +400,6 @@ const styles = StyleSheet.create({
         gap: 8,
         marginBottom: 20,
     },
-    // ADDED: Particle container
     particleContainer: {
         width: 120,
         height: 120,
@@ -434,7 +429,6 @@ const styles = StyleSheet.create({
         color: colors.lightGray,
         fontSize: 16,
     },
-    // ADDED: Progress bar
     progressBarContainer: {
         width: 200,
         height: 4,
@@ -452,7 +446,6 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         elevation: 3,
     },
-    // ADDED: Result icon container
     resultIconContainer: {
         position: 'relative',
         marginBottom: 10,
@@ -556,7 +549,6 @@ const styles = StyleSheet.create({
         color: colors.background,
         fontSize: 12,
     },
-    // Error state styles
     errorTitle: {
         fontFamily: fonts.heading,
         color: colors.warning,
@@ -572,7 +564,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         marginBottom: 30,
     },
-    // ADDED: Error suggestions
     errorSuggestions: {
         backgroundColor: '#1A1C2A',
         borderRadius: 15,

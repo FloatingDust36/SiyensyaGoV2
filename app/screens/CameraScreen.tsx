@@ -2,7 +2,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Linking, Animated, Modal, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CameraView, useCameraPermissions, FlashMode } from 'expo-camera'; // ADDED: FlashMode
+import { CameraView, useCameraPermissions, FlashMode } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -20,7 +20,7 @@ export default function CameraScreen() {
 
     // State for camera controls
     const [facing, setFacing] = useState<'back' | 'front'>('back');
-    const [flash, setFlash] = useState<FlashMode>('off'); // CHANGED: Use FlashMode type
+    const [flash, setFlash] = useState<FlashMode>('off');
     const [isScanning, setIsScanning] = useState(false);
     const [showHelpModal, setShowHelpModal] = useState(false);
 
@@ -120,7 +120,6 @@ export default function CameraScreen() {
         if (cameraRef.current && !isScanning) {
             setIsScanning(true);
             try {
-                // FIXED: Removed flash parameter - it's controlled by the enableTorch prop on CameraView
                 const photo = await cameraRef.current.takePictureAsync({
                     quality: 0.7,
                 });
@@ -234,7 +233,6 @@ export default function CameraScreen() {
             </View>
 
             <View style={styles.cameraContainer}>
-                {/* MODIFIED: Camera controls overlay (top) - SWAPPED POSITIONS */}
                 <View style={styles.controlsTop}>
                     {/* Camera flip on LEFT */}
                     <TouchableOpacity style={styles.controlButton} onPress={toggleCameraFacing}>
@@ -259,7 +257,7 @@ export default function CameraScreen() {
                         style={styles.camera}
                         ref={cameraRef}
                         facing={facing}
-                        enableTorch={flash === 'on'} // ADDED: This controls the torch/flash
+                        enableTorch={flash === 'on'}
                     />
                 )}
 
@@ -316,7 +314,6 @@ export default function CameraScreen() {
 
             </View>
 
-            {/* Enhanced bottom bar with info */}
             <View style={styles.bottomBar}>
                 {/* Quick actions */}
                 <View style={styles.quickActions}>

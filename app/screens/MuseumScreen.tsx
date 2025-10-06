@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts } from '../theme/theme';
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - 60) / 2; // 2 columns with padding
+const CARD_WIDTH = (width - 60) / 2;
 
 type Discovery = {
     id: string;
@@ -256,7 +256,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 40,
-        paddingTop: 20,
     },
     emptyIconContainer: {
         width: 140,

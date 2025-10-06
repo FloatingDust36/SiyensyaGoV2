@@ -3,9 +3,8 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts } from '../theme/theme';
-import { useSafeAreaInsets } from 'react-native-safe-area-context'; // Import the hook
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// Import our screens
 import CameraScreen from '../screens/CameraScreen';
 import MuseumScreen from '../screens/MuseumScreen';
 import ProfileScreen from '../screens/ProfileScreen';
@@ -13,7 +12,6 @@ import ProfileScreen from '../screens/ProfileScreen';
 const Tab = createBottomTabNavigator();
 
 export default function TabNavigator() {
-    // Get bottom safe area inset
     const insets = useSafeAreaInsets();
 
     return (

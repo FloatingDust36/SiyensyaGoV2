@@ -1,13 +1,11 @@
 // In app/screens/LoginScreen.tsx
-import React, { useState } from 'react'; // ADDED: useState
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Animated, KeyboardAvoidingView, Platform, ScrollView } from 'react-native'; // ADDED: Animated, KeyboardAvoidingView, Platform, ScrollView
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts } from '../theme/theme';
 
-// We'll receive the navigation prop to move to other screens
 export default function LoginScreen({ navigation }: any) {
-    // ========== ADDED: State management ==========
     const [isSignUp, setIsSignUp] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -19,9 +17,8 @@ export default function LoginScreen({ navigation }: any) {
     // Animation values
     const slideAnim = React.useRef(new Animated.Value(0)).current;
     const glowAnim = React.useRef(new Animated.Value(0)).current;
-    // ========== END ADDED ==========
 
-    // ========== ADDED: Start glow animation on mount ==========
+    // Start glow animation on mount
     React.useEffect(() => {
         Animated.loop(
             Animated.sequence([
@@ -43,9 +40,8 @@ export default function LoginScreen({ navigation }: any) {
         inputRange: [0, 1],
         outputRange: ['rgba(0, 191, 255, 0.1)', 'rgba(0, 191, 255, 0.3)'],
     });
-    // ========== END ADDED ==========
 
-    // ========== ADDED: Toggle between sign in and sign up ==========
+    // Toggle between sign in and sign up
     const toggleMode = () => {
         Animated.timing(slideAnim, {
             toValue: isSignUp ? 0 : 1,
@@ -59,9 +55,8 @@ export default function LoginScreen({ navigation }: any) {
         setConfirmPassword('');
         setFullName('');
     };
-    // ========== END ADDED ==========
 
-    // ========== ADDED: Handle authentication ==========
+    // Handle authentication
     const handleAuth = () => {
         // TODO: Implement actual authentication logic
         if (isSignUp) {
@@ -94,7 +89,6 @@ export default function LoginScreen({ navigation }: any) {
         alert(`${provider} login coming soon!`);
         // TODO: Implement social login
     };
-    // ========== END ADDED ==========
 
     const handleGuest = () => {
         // Navigate to the main app tabs
@@ -103,7 +97,7 @@ export default function LoginScreen({ navigation }: any) {
 
     return (
         <SafeAreaView style={styles.container}>
-            {/* ADDED: KeyboardAvoidingView and ScrollView for better mobile experience */}
+            {/* KeyboardAvoidingView and ScrollView for better mobile experience */}
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.keyboardView}
@@ -113,7 +107,7 @@ export default function LoginScreen({ navigation }: any) {
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
                 >
-                    {/* MODIFIED: Enhanced header with animated glow */}
+                    {/* Enhanced header with animated glow */}
                     <Animated.View style={[styles.header, { backgroundColor: glowColor }]}>
                         <Ionicons name="planet-outline" size={60} color={colors.primary} />
                         <Text style={styles.title}>
@@ -126,9 +120,9 @@ export default function LoginScreen({ navigation }: any) {
                         </Text>
                     </Animated.View>
 
-                    {/* MODIFIED: Enhanced form with conditional fields */}
+                    {/* Enhanced form with conditional fields */}
                     <View style={styles.form}>
-                        {/* ADDED: Full Name field for sign up */}
+                        {/* Full Name field for sign up */}
                         {isSignUp && (
                             <View style={styles.inputContainer}>
                                 <Ionicons name="person-outline" size={20} color={colors.lightGray} style={styles.inputIcon} />
@@ -143,7 +137,7 @@ export default function LoginScreen({ navigation }: any) {
                             </View>
                         )}
 
-                        {/* MODIFIED: Email input with state */}
+                        {/* Email input with state */}
                         <View style={styles.inputContainer}>
                             <Ionicons name="mail-outline" size={20} color={colors.lightGray} style={styles.inputIcon} />
                             <TextInput
@@ -157,7 +151,7 @@ export default function LoginScreen({ navigation }: any) {
                             />
                         </View>
 
-                        {/* MODIFIED: Password input with visibility toggle */}
+                        {/* Password input with visibility toggle */}
                         <View style={styles.inputContainer}>
                             <Ionicons name="lock-closed-outline" size={20} color={colors.lightGray} style={styles.inputIcon} />
                             <TextInput
@@ -180,7 +174,7 @@ export default function LoginScreen({ navigation }: any) {
                             </TouchableOpacity>
                         </View>
 
-                        {/* ADDED: Confirm Password field for sign up */}
+                        {/* Confirm Password field for sign up */}
                         {isSignUp && (
                             <View style={styles.inputContainer}>
                                 <Ionicons name="lock-closed-outline" size={20} color={colors.lightGray} style={styles.inputIcon} />
@@ -205,7 +199,7 @@ export default function LoginScreen({ navigation }: any) {
                             </View>
                         )}
 
-                        {/* ADDED: Forgot Password link (only for sign in) */}
+                        {/* Forgot Password link (only for sign in) */}
                         {!isSignUp && (
                             <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPassword}>
                                 <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
@@ -213,7 +207,7 @@ export default function LoginScreen({ navigation }: any) {
                         )}
                     </View>
 
-                    {/* MODIFIED: Action button with dynamic text */}
+                    {/* Action button with dynamic text */}
                     <View style={styles.actions}>
                         <TouchableOpacity style={styles.mainButton} onPress={handleAuth}>
                             <Text style={styles.mainButtonText}>
@@ -221,7 +215,7 @@ export default function LoginScreen({ navigation }: any) {
                             </Text>
                         </TouchableOpacity>
 
-                        {/* MODIFIED: Toggle mode button */}
+                        {/* Toggle mode button */}
                         <TouchableOpacity style={styles.secondaryButton} onPress={toggleMode}>
                             <Text style={styles.secondaryButtonText}>
                                 {isSignUp ? 'Already have an account? Sign In' : 'Create New Account'}
@@ -229,14 +223,14 @@ export default function LoginScreen({ navigation }: any) {
                         </TouchableOpacity>
                     </View>
 
-                    {/* ADDED: Social login divider */}
+                    {/* Social login divider */}
                     <View style={styles.dividerContainer}>
                         <View style={styles.divider} />
                         <Text style={styles.dividerText}>OR</Text>
                         <View style={styles.divider} />
                     </View>
 
-                    {/* ADDED: Social login buttons */}
+                    {/* Social login buttons */}
                     <View style={styles.socialContainer}>
                         <TouchableOpacity
                             style={styles.socialButton}
@@ -276,45 +270,42 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: colors.background,
     },
-    // ADDED: KeyboardAvoidingView style
     keyboardView: {
         flex: 1,
     },
-    // ADDED: ScrollView content style
     scrollContent: {
         flexGrow: 1,
         justifyContent: 'center',
         padding: 20,
-        paddingTop: 40, // ADDED: More top padding
+        paddingTop: 40,
     },
-    // MODIFIED: Enhanced header with more padding and border
     header: {
-        paddingVertical: 30, // CHANGED: from paddingTop: 40
+        paddingVertical: 30,
         alignItems: 'center',
-        borderRadius: 20, // ADDED
-        marginBottom: 30, // ADDED
-        borderWidth: 1, // ADDED
-        borderColor: 'rgba(0, 191, 255, 0.2)', // ADDED
+        borderRadius: 20,
+        marginBottom: 30,
+        borderWidth: 1,
+        borderColor: 'rgba(0, 191, 255, 0.2)',
     },
     title: {
         fontFamily: fonts.heading,
         color: colors.text,
-        fontSize: 32, // CHANGED: from 36
+        fontSize: 32,
         textAlign: 'center',
-        marginTop: 15, // ADDED
+        marginTop: 15,
     },
     subtitle: {
         fontFamily: fonts.body,
         color: colors.lightGray,
-        fontSize: 15, // CHANGED: from 16
+        fontSize: 15,
         textAlign: 'center',
         marginTop: 10,
-        maxWidth: '90%', // CHANGED: from 80%
-        lineHeight: 22, // ADDED
+        maxWidth: '90%',
+        lineHeight: 22,
     },
     form: {
         gap: 15,
-        marginBottom: 20, // ADDED
+        marginBottom: 20,
     },
     inputContainer: {
         flexDirection: 'row',
@@ -333,13 +324,11 @@ const styles = StyleSheet.create({
         paddingVertical: 15,
         paddingRight: 15,
         fontSize: 16,
-        fontFamily: fonts.body, // ADDED
+        fontFamily: fonts.body,
     },
-    // ADDED: Eye icon for password visibility
     eyeIcon: {
         paddingHorizontal: 15,
     },
-    // ADDED: Forgot password link
     forgotPassword: {
         alignSelf: 'flex-end',
         marginTop: 5,
@@ -351,14 +340,13 @@ const styles = StyleSheet.create({
     },
     actions: {
         gap: 15,
-        marginBottom: 20, // ADDED
+        marginBottom: 20,
     },
     mainButton: {
         backgroundColor: colors.primary,
-        padding: 18, // CHANGED: from 20
+        padding: 18,
         borderRadius: 10,
         alignItems: 'center',
-        // ADDED: Shadow for depth
         shadowColor: colors.primary,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
@@ -373,16 +361,15 @@ const styles = StyleSheet.create({
     secondaryButton: {
         borderColor: colors.primary,
         borderWidth: 1,
-        padding: 18, // CHANGED: from 20
+        padding: 18,
         borderRadius: 10,
         alignItems: 'center',
     },
     secondaryButtonText: {
         color: colors.primary,
-        fontSize: 16, // CHANGED: from 18
-        fontFamily: fonts.body, // CHANGED: from fonts.heading
+        fontSize: 16,
+        fontFamily: fonts.body,
     },
-    // ADDED: Divider styles
     dividerContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -399,7 +386,6 @@ const styles = StyleSheet.create({
         fontFamily: fonts.body,
         marginHorizontal: 15,
     },
-    // ADDED: Social login styles
     socialContainer: {
         flexDirection: 'row',
         justifyContent: 'center',
@@ -429,7 +415,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,
-        paddingVertical: 10, // ADDED
+        paddingVertical: 10,
     },
     guestButtonText: {
         color: colors.primary,

@@ -24,6 +24,6 @@ export type RootStackParamList = {
     Launch: undefined;
     Login: undefined;
     MainTabs: NavigatorScreenParams<TabParamList>;
-    ObjectRecognition: { imageUri: string }; // This screen will expect an imageUri
+    ObjectRecognition: { imageUri: string };
     LearningContent: { imageUri: string; result: AnalysisResult };
 };

@@ -1,6 +1,5 @@
 // In app/theme/theme.ts
 
-// 1. Define our color palette based on the project overview
 export const colors = {
     background: '#0D0F18',     // A deep, dark blue for our "Deep Space" background
     primary: '#00BFFF',         // A vibrant "Quantum Blue" for accents and interactive elements
@@ -13,6 +12,6 @@ export const colors = {
 
 // 2. Define our font families
 export const fonts = {
-    heading: 'Orbitron_700Bold', // Our sci-fi heading font
-    body: 'System',              // Use the default system font for body text for maximum readability
+    heading: 'Orbitron_700Bold', // Sci-fi heading font
+    body: 'System',              // Default system font for body text for maximum readability
 };
