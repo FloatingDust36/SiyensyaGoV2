@@ -314,7 +314,6 @@ export default function CameraScreen() {
                     </View>
                 </Animated.View>
 
-                {/* REMOVED: Bottom camera controls - no longer needed */}
             </View>
 
             {/* Enhanced bottom bar with info */}
@@ -639,11 +638,10 @@ const styles = StyleSheet.create({
         opacity: 0.6,
     },
     bottomBar: {
-        paddingBottom: 40,
-        paddingTop: 15,
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 25,
+        gap: 15,
+        paddingBottom: 55,
     },
     quickActions: {
         flexDirection: 'row',
@@ -651,6 +649,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         width: '100%',
         paddingHorizontal: 40,
+        marginTop: 10,
     },
     quickActionButton: {
         alignItems: 'center',
