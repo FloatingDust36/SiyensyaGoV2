@@ -1,6 +1,6 @@
 // In app/screens/GradeLevelScreen.tsx
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -88,19 +88,22 @@ export default function GradeLevelScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            {/* Header */}
-            <View style={styles.header}>
-                <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-                    <Ionicons name="school" size={60} color={colors.primary} />
-                </Animated.View>
-                <Text style={styles.title}>Choose Your Level</Text>
-                <Text style={styles.subtitle}>
-                    We'll personalize your learning experience based on your grade level
-                </Text>
-            </View>
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.scrollContent}
+            >
+                {/* Header */}
+                <View style={styles.header}>
+                    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+                        <Ionicons name="school" size={60} color={colors.primary} />
+                    </Animated.View>
+                    <Text style={styles.title}>Choose Your Level</Text>
+                    <Text style={styles.subtitle}>
+                        We'll personalize your learning experience based on your grade level
+                    </Text>
+                </View>
 
-            {/* Grade Level Cards */}
-            <View style={styles.cardsContainer}>
+                {/* Grade Level Cards */}
                 {GRADE_LEVELS.map((level) => (
                     <TouchableOpacity
                         key={level.id}
@@ -133,37 +136,37 @@ export default function GradeLevelScreen() {
                         </View>
                     </TouchableOpacity>
                 ))}
-            </View>
 
-            {/* Info Box */}
-            <View style={styles.infoBox}>
-                <Ionicons name="information-circle" size={20} color={colors.primary} />
-                <Text style={styles.infoText}>
-                    Don't worry! You can change this anytime in your profile settings.
-                </Text>
-            </View>
+                {/* Info Box */}
+                <View style={styles.infoBox}>
+                    <Ionicons name="information-circle" size={20} color={colors.primary} />
+                    <Text style={styles.infoText}>
+                        Don't worry! You can change this anytime in your profile settings.
+                    </Text>
+                </View>
 
-            {/* Action Buttons */}
-            <View style={styles.actions}>
-                <TouchableOpacity
-                    style={styles.continueButton}
-                    onPress={handleContinue}
-                    disabled={isProcessing}
-                >
-                    {isProcessing ? (
-                        <Text style={styles.continueButtonText}>Setting up...</Text>
-                    ) : (
-                        <>
-                            <Text style={styles.continueButtonText}>Continue</Text>
-                            <Ionicons name="arrow-forward" size={20} color={colors.background} />
-                        </>
-                    )}
-                </TouchableOpacity>
+                {/* Action Buttons */}
+                <View style={styles.actions}>
+                    <TouchableOpacity
+                        style={styles.continueButton}
+                        onPress={handleContinue}
+                        disabled={isProcessing}
+                    >
+                        {isProcessing ? (
+                            <Text style={styles.continueButtonText}>Setting up...</Text>
+                        ) : (
+                            <>
+                                <Text style={styles.continueButtonText}>Continue</Text>
+                                <Ionicons name="arrow-forward" size={20} color={colors.background} />
+                            </>
+                        )}
+                    </TouchableOpacity>
 
-                <TouchableOpacity onPress={handleSkip}>
-                    <Text style={styles.skipText}>Skip for now</Text>
-                </TouchableOpacity>
-            </View>
+                    <TouchableOpacity onPress={handleSkip}>
+                        <Text style={styles.skipText}>Skip for now</Text>
+                    </TouchableOpacity>
+                </View>
+            </ScrollView>
         </SafeAreaView>
     );
 }
@@ -172,17 +175,20 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
+    },
+    scrollContent: {
         padding: 20,
+        paddingTop: 40,
     },
     header: {
         alignItems: 'center',
-        marginTop: 20,
         marginBottom: 30,
     },
     title: {
         fontFamily: fonts.heading,
         fontSize: 32,
         color: colors.text,
+        textAlign: 'center',
         marginTop: 20,
         marginBottom: 10,
     },
@@ -191,12 +197,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: colors.lightGray,
         textAlign: 'center',
-        paddingHorizontal: 20,
         lineHeight: 24,
-    },
-    cardsContainer: {
-        flex: 1,
-        gap: 15,
     },
     card: {
         backgroundColor: '#1A1C2A',
@@ -204,6 +205,7 @@ const styles = StyleSheet.create({
         padding: 20,
         borderWidth: 2,
         borderColor: 'rgba(0, 191, 255, 0.2)',
+        marginBottom: 15,
     },
     cardSelected: {
         borderWidth: 3,
@@ -211,7 +213,7 @@ const styles = StyleSheet.create({
     },
     cardContent: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         gap: 15,
     },
     iconContainer: {
@@ -268,7 +270,8 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         borderWidth: 1,
         borderColor: 'rgba(0, 191, 255, 0.3)',
-        marginVertical: 20,
+        marginTop: 10,
+        marginBottom: 20,
     },
     infoText: {
         flex: 1,
