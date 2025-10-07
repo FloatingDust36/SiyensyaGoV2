@@ -8,6 +8,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import * as SystemUI from 'expo-system-ui';
 import RootNavigator from './app/navigation/RootNavigator';
 import { colors } from './app/theme/theme';
+import { AppProvider } from './app/context/AppContext';
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({
@@ -28,9 +29,11 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        <RootNavigator />
-      </NavigationContainer>
+      <AppProvider>
+        <NavigationContainer>
+          <RootNavigator />
+        </NavigationContainer>
+      </AppProvider>
       <StatusBar style="light" />
     </SafeAreaProvider>
   );

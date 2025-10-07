@@ -9,6 +9,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts } from '../theme/theme';
 import * as ImagePicker from 'expo-image-picker';
+import { useApp } from '../context/AppContext';
 
 type CameraNavigationProp = StackNavigationProp<RootStackParamList, 'MainTabs'>;
 
@@ -17,6 +18,7 @@ export default function CameraScreen() {
     const cameraRef = useRef<CameraView>(null);
     const navigation = useNavigation<CameraNavigationProp>();
     const isFocused = useIsFocused();
+    const { stats } = useApp();
 
     // State for camera controls
     const [facing, setFacing] = useState<'back' | 'front'>('back');
@@ -221,7 +223,7 @@ export default function CameraScreen() {
                     {/* Discovery count badge */}
                     <View style={styles.discoveryBadge}>
                         <Ionicons name="bookmark" size={16} color={colors.primary} />
-                        <Text style={styles.discoveryCount}>0</Text>
+                        <Text style={styles.discoveryCount}>{stats.totalDiscoveries}</Text>
                     </View>
                 </View>
 

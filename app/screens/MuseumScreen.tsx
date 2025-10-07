@@ -1,21 +1,16 @@
 // In app/screens/MuseumScreen.tsx
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, Dimensions } from 'react-native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../navigation/types';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { colors, fonts } from '../theme/theme';
+import { useApp } from '../context/AppContext';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 60) / 2;
-
-type Discovery = {
-    id: string;
-    name: string;
-    image: string;
-    category: string;
-    categoryColor: string;
-    date: string;
-};
 
 // Category filters
 const CATEGORIES = [
@@ -26,22 +21,20 @@ const CATEGORIES = [
     { id: 'technology', name: 'Tech', icon: 'hardware-chip-outline' },
 ];
 
-const MOCK_DISCOVERIES: Discovery[] = [
-    // Empty array for now - will show empty state
-];
-
 export default function MuseumScreen() {
+    const { discoveries } = useApp();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('all');
+    const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
 
     // Filter discoveries based on search and category
-    const filteredDiscoveries = MOCK_DISCOVERIES.filter((item: Discovery) => {
-        const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
+    const filteredDiscoveries = discoveries.filter((item) => {
+        const matchesSearch = item.objectName.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesCategory = selectedCategory === 'all' || item.category.toLowerCase() === selectedCategory;
         return matchesSearch && matchesCategory;
     });
 
-    const discoveryCount = MOCK_DISCOVERIES.length;
+    const discoveryCount = discoveries.length;
 
     return (
         <SafeAreaView style={styles.container}>
@@ -129,7 +122,10 @@ export default function MuseumScreen() {
                             <Text style={styles.featureText}>Track your learning journey</Text>
                         </View>
                     </View>
-                    <TouchableOpacity style={styles.startScanningButton}>
+                    <TouchableOpacity
+                        style={styles.startScanningButton}
+                        onPress={() => navigation.navigate('Camera' as never)}
+                    >
                         <Ionicons name="camera-outline" size={24} color={colors.background} />
                         <Text style={styles.startScanningText}>Start Scanning</Text>
                     </TouchableOpacity>
@@ -141,20 +137,36 @@ export default function MuseumScreen() {
                     contentContainerStyle={styles.gridContainer}
                     showsVerticalScrollIndicator={false}
                 >
-                    {filteredDiscoveries.map((item: Discovery, index: number) => (
-                        <TouchableOpacity key={index} style={styles.discoveryCard}>
-                            <Image source={{ uri: item.image }} style={styles.cardImage} />
+                    {filteredDiscoveries.map((item) => (
+                        <TouchableOpacity
+                            key={item.id}
+                            style={styles.discoveryCard}
+                            onPress={() => navigation.navigate('LearningContent', {
+                                imageUri: item.imageUri,
+                                result: {
+                                    objectName: item.objectName,
+                                    confidence: item.confidence,
+                                    funFact: item.funFact,
+                                    the_science_in_action: item.the_science_in_action,
+                                    why_it_matters_to_you: item.why_it_matters_to_you,
+                                    tryThis: item.tryThis,
+                                    explore_further: item.explore_further,
+                                },
+                                discoveryId: item.id,
+                            })}
+                        >
+                            <Image source={{ uri: item.imageUri }} style={styles.cardImage} />
                             <View style={styles.cardContent}>
                                 <Text style={styles.cardTitle} numberOfLines={2}>
-                                    {item.name}
+                                    {item.objectName}
                                 </Text>
                                 <View style={styles.cardFooter}>
-                                    <View style={[styles.categoryBadge, { backgroundColor: `${item.categoryColor}20` }]}>
-                                        <Text style={[styles.categoryBadgeText, { color: item.categoryColor }]}>
+                                    <View style={[styles.categoryBadge, { backgroundColor: 'rgba(0, 191, 255, 0.2)' }]}>
+                                        <Text style={[styles.categoryBadgeText, { color: colors.primary }]}>
                                             {item.category}
                                         </Text>
                                     </View>
-                                    <Text style={styles.cardDate}>{item.date}</Text>
+                                    <Text style={styles.cardDate}>{item.dateSaved}</Text>
                                 </View>
                             </View>
                         </TouchableOpacity>

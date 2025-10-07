@@ -1,12 +1,13 @@
 // In app/screens/LearningContentScreen.tsx
-import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Animated, Dimensions } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Animated, Dimensions, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList, AnalysisResult } from '../navigation/types';
 import { colors, fonts } from '../theme/theme';
+import { useApp } from '../context/AppContext';
 
 type LearningContentRouteProp = RouteProp<RootStackParamList, 'LearningContent'>;
 type NavigationProp = StackNavigationProp<RootStackParamList>;
@@ -25,6 +26,10 @@ export default function LearningContentScreen() {
     const route = useRoute<LearningContentRouteProp>();
     const navigation = useNavigation<NavigationProp>();
 
+    const { addDiscovery, removeDiscovery, getDiscoveryById } = useApp();
+    const [isSaved, setIsSaved] = useState(false);
+    const [isFromMuseum, setIsFromMuseum] = useState(false);
+
     const imageUri = route.params?.imageUri || '';
     const result = route.params?.result || {
         objectName: 'Unknown Object',
@@ -40,6 +45,15 @@ export default function LearningContentScreen() {
     const fadeAnim = useRef(new Animated.Value(1)).current;
     const slideAnim = useRef(new Animated.Value(0)).current;
     const scrollViewRef = useRef<ScrollView>(null);
+
+    useEffect(() => {
+        // Check if this is from Museum (has discoveryId)
+        const discoveryId = route.params?.discoveryId;
+        if (discoveryId) {
+            setIsFromMuseum(true);
+            setIsSaved(true);
+        }
+    }, [route.params]);
 
     const changeSection = (newIndex: number) => {
         // Slide and fade animation
@@ -78,10 +92,66 @@ export default function LearningContentScreen() {
     const handleDotPress = (index: number) => changeSection(index);
 
     const handleScanAnother = () => navigation.navigate('MainTabs', { screen: 'Camera' });
-    const handleAddToMuseum = () => {
-        // TODO: Implement actual museum save functionality
-        alert(`"${result.objectName}" saved to your Museum!`);
-        navigation.navigate('MainTabs', { screen: 'Museum' });
+    const handleAddToMuseum = async () => {
+        if (isFromMuseum) {
+            // Delete from museum
+            Alert.alert(
+                'Delete Discovery',
+                `Remove "${result.objectName}" from your Museum?`,
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'Delete',
+                        style: 'destructive',
+                        onPress: async () => {
+                            try {
+                                const discoveryId = route.params?.discoveryId;
+                                if (discoveryId) {
+                                    await removeDiscovery(discoveryId);
+                                    Alert.alert('Deleted', 'Discovery removed from Museum');
+                                    navigation.navigate('MainTabs', { screen: 'Museum' });
+                                }
+                            } catch (error) {
+                                Alert.alert('Error', 'Failed to delete discovery');
+                            }
+                        }
+                    }
+                ]
+            );
+            return;
+        }
+
+        if (isSaved) {
+            navigation.navigate('MainTabs', { screen: 'Museum' });
+            return;
+        }
+
+        try {
+            await addDiscovery({
+                objectName: result.objectName,
+                confidence: result.confidence,
+                category: 'General', // TODO: Add category detection in Gemini
+                imageUri: imageUri,
+                funFact: result.funFact,
+                the_science_in_action: result.the_science_in_action,
+                why_it_matters_to_you: result.why_it_matters_to_you,
+                tryThis: result.tryThis,
+                explore_further: result.explore_further,
+            });
+
+            setIsSaved(true);
+            Alert.alert(
+                'Saved!',
+                `"${result.objectName}" has been added to your Museum!`,
+                [
+                    { text: 'View Museum', onPress: () => navigation.navigate('MainTabs', { screen: 'Museum' }) },
+                    { text: 'Continue Learning', style: 'cancel' }
+                ]
+            );
+        } catch (error) {
+            Alert.alert('Error', 'Failed to save discovery. Please try again.');
+            console.error('Save error:', error);
+        }
     };
 
     const section = SECTIONS[currentSection];
@@ -116,7 +186,11 @@ export default function LearningContentScreen() {
                 </View>
 
                 <TouchableOpacity onPress={handleAddToMuseum} style={styles.bookmarkButton}>
-                    <Ionicons name="bookmark-outline" size={26} color={colors.primary} />
+                    <Ionicons
+                        name={isFromMuseum ? "trash-outline" : (isSaved ? "bookmark" : "bookmark-outline")}
+                        size={26}
+                        color={isFromMuseum ? colors.warning : (isSaved ? colors.success : colors.primary)}
+                    />
                 </TouchableOpacity>
             </View>
 
@@ -247,9 +321,18 @@ export default function LearningContentScreen() {
                             <Ionicons name="camera-outline" size={18} color={colors.primary} />
                             <Text style={styles.secondaryButtonText}>Scan Again</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.primaryButton} onPress={handleAddToMuseum}>
-                            <Ionicons name="bookmark" size={18} color={colors.background} />
-                            <Text style={styles.primaryButtonText}>Save to Museum</Text>
+                        <TouchableOpacity
+                            style={[styles.primaryButton, isFromMuseum && styles.deleteButton]}
+                            onPress={handleAddToMuseum}
+                        >
+                            <Ionicons
+                                name={isFromMuseum ? "trash" : (isSaved ? "checkmark" : "bookmark")}
+                                size={18}
+                                color={colors.background}
+                            />
+                            <Text style={styles.primaryButtonText}>
+                                {isFromMuseum ? 'Delete from Museum' : (isSaved ? 'Saved! View Museum' : 'Save to Museum')}
+                            </Text>
                         </TouchableOpacity>
                     </View>
                 ) : (
@@ -594,5 +677,9 @@ const styles = StyleSheet.create({
         fontFamily: fonts.heading,
         color: colors.background,
         fontSize: 12,
+    },
+    deleteButton: {
+        backgroundColor: colors.warning,
+        shadowColor: colors.warning,
     },
 });

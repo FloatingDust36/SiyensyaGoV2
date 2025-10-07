@@ -5,48 +5,28 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { colors, fonts } from '../theme/theme';
-
-type GradeLevel = 'elementary' | 'juniorHigh' | 'seniorHigh';
+import { useApp } from '../context/AppContext';
 
 export default function ProfileScreen() {
     const navigation = useNavigation();
 
-    // Mock user data - TODO: Replace with actual user context/state
-    const [isGuest, setIsGuest] = useState(true);
-    const [userName, setUserName] = useState('Guest Explorer');
-    const [gradeLevel, setGradeLevel] = useState<GradeLevel>('juniorHigh');
-    const [discoveryCount, setDiscoveryCount] = useState(0);
-    const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-    const [soundEnabled, setSoundEnabled] = useState(true);
-
-    // Stats data - TODO: Calculate from actual discoveries
-    const stats = {
-        totalDiscoveries: discoveryCount,
-        favoriteSubject: 'Physics',
-        streak: 0,
-        subjects: {
-            Physics: 0,
-            Chemistry: 0,
-            Biology: 0,
-            Technology: 0,
-        }
-    };
+    const { user, updateUser, stats, settings, updateSettings, signOut, clearAllData } = useApp();
 
     const handleChangeGradeLevel = () => {
         Alert.alert(
             'Select Grade Level',
             'Choose your current grade level',
             [
-                { text: 'Elementary (K-6)', onPress: () => setGradeLevel('elementary') },
-                { text: 'Junior High (7-10)', onPress: () => setGradeLevel('juniorHigh') },
-                { text: 'Senior High (11-12)', onPress: () => setGradeLevel('seniorHigh') },
+                { text: 'Elementary (K-6)', onPress: () => updateUser({ gradeLevel: 'elementary' }) },
+                { text: 'Junior High (7-10)', onPress: () => updateUser({ gradeLevel: 'juniorHigh' }) },
+                { text: 'Senior High (11-12)', onPress: () => updateUser({ gradeLevel: 'seniorHigh' }) },
                 { text: 'Cancel', style: 'cancel' }
             ]
         );
     };
 
     const getGradeLevelDisplay = () => {
-        switch (gradeLevel) {
+        switch (user.gradeLevel) {
             case 'elementary': return 'Elementary (K-6)';
             case 'juniorHigh': return 'Junior High (7-10)';
             case 'seniorHigh': return 'Senior High (11-12)';
@@ -62,8 +42,8 @@ export default function ProfileScreen() {
                 {
                     text: 'Sign Out',
                     style: 'destructive',
-                    onPress: () => {
-                        // TODO: Implement actual sign out logic
+                    onPress: async () => {
+                        await signOut();
                         Alert.alert('Signed Out', 'You have been signed out successfully');
                         navigation.navigate('Login' as never);
                     }
@@ -119,14 +99,14 @@ export default function ProfileScreen() {
                         <View style={styles.avatar}>
                             <Ionicons name="person" size={40} color={colors.primary} />
                         </View>
-                        {isGuest && (
+                        {user.isGuest && (
                             <View style={styles.guestBadge}>
                                 <Text style={styles.guestBadgeText}>GUEST</Text>
                             </View>
                         )}
                     </View>
                     <View style={styles.userInfo}>
-                        <Text style={styles.userName}>{userName}</Text>
+                        <Text style={styles.userName}>{user.userName}</Text>
                         <TouchableOpacity
                             style={styles.gradeLevelButton}
                             onPress={handleChangeGradeLevel}
@@ -139,7 +119,7 @@ export default function ProfileScreen() {
                 </View>
 
                 {/* Guest Upgrade Prompt */}
-                {isGuest && (
+                {user.isGuest && (
                     <TouchableOpacity style={styles.upgradeCard} onPress={handleUpgradeAccount}>
                         <View style={styles.upgradeIcon}>
                             <Ionicons name="rocket" size={28} color={colors.secondary} />
@@ -182,18 +162,18 @@ export default function ProfileScreen() {
                     {stats.totalDiscoveries > 0 && (
                         <View style={styles.subjectsCard}>
                             <Text style={styles.subjectsTitle}>Subject Distribution</Text>
-                            {Object.entries(stats.subjects).map(([subject, count]) => (
+                            {Object.entries(stats.subjectDistribution).map(([subject, count]) => (
                                 <View key={subject} style={styles.subjectRow}>
                                     <Text style={styles.subjectName}>{subject}</Text>
                                     <View style={styles.subjectBar}>
                                         <View
                                             style={[
                                                 styles.subjectBarFill,
-                                                { width: `${(count / stats.totalDiscoveries) * 100}%` }
+                                                { width: `${(Number(count) / stats.totalDiscoveries) * 100}%` }
                                             ]}
                                         />
                                     </View>
-                                    <Text style={styles.subjectCount}>{count}</Text>
+                                    <Text style={styles.subjectCount}>{Number(count)}</Text>
                                 </View>
                             ))}
                         </View>
@@ -223,8 +203,8 @@ export default function ProfileScreen() {
                             <Text style={styles.settingText}>Notifications</Text>
                         </View>
                         <Switch
-                            value={notificationsEnabled}
-                            onValueChange={setNotificationsEnabled}
+                            value={settings.notificationsEnabled}
+                            onValueChange={(value) => updateSettings({ notificationsEnabled: value })}
                             trackColor={{ false: '#1A1C2A', true: colors.primary }}
                             thumbColor={colors.text}
                         />
@@ -237,8 +217,8 @@ export default function ProfileScreen() {
                             <Text style={styles.settingText}>Sound Effects</Text>
                         </View>
                         <Switch
-                            value={soundEnabled}
-                            onValueChange={setSoundEnabled}
+                            value={settings.soundEnabled}
+                            onValueChange={(value) => updateSettings({ soundEnabled: value })}
                             trackColor={{ false: '#1A1C2A', true: colors.primary }}
                             thumbColor={colors.text}
                         />
@@ -294,7 +274,7 @@ export default function ProfileScreen() {
 
                 {/* Sign Out / Delete Account */}
                 <View style={styles.section}>
-                    {!isGuest ? (
+                    {!user.isGuest ? (
                         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
                             <Ionicons name="log-out-outline" size={24} color={colors.warning} />
                             <Text style={styles.signOutText}>Sign Out</Text>
@@ -304,7 +284,12 @@ export default function ProfileScreen() {
                             style={styles.signOutButton}
                             onPress={() => Alert.alert('Clear Data', 'This will remove all your discoveries. Are you sure?', [
                                 { text: 'Cancel', style: 'cancel' },
-                                { text: 'Clear Data', style: 'destructive', onPress: () => { } }
+                                {
+                                    text: 'Clear Data', style: 'destructive', onPress: async () => {
+                                        await clearAllData();
+                                        Alert.alert('Data Cleared', 'All your data has been removed');
+                                    }
+                                }
                             ])}
                         >
                             <Ionicons name="trash-outline" size={24} color={colors.warning} />

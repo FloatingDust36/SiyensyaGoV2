@@ -25,5 +25,9 @@ export type RootStackParamList = {
     Login: undefined;
     MainTabs: NavigatorScreenParams<TabParamList>;
     ObjectRecognition: { imageUri: string };
-    LearningContent: { imageUri: string; result: AnalysisResult };
+    LearningContent: {
+        imageUri: string;
+        result: AnalysisResult;
+        discoveryId?: string; // Optional: if viewing from Museum
+    };
 };
