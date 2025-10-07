@@ -5,6 +5,7 @@ import { RootStackParamList } from './types';
 
 import LaunchScreen from '../screens/LaunchScreen';
 import LoginScreen from '../screens/LoginScreen';
+import GradeLevelScreen from '../screens/GradeLevelScreen';
 import TabNavigator from './TabNavigator';
 import ObjectRecognitionScreen from '../screens/ObjectRecognitionScreen';
 import LearningContentScreen from '../screens/LearningContentScreen';
@@ -19,6 +20,7 @@ export default function RootNavigator() {
         >
             <Stack.Screen name="Launch" component={LaunchScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="GradeLevel" component={GradeLevelScreen} />
             <Stack.Screen name="MainTabs" component={TabNavigator} />
             <Stack.Screen name="ObjectRecognition" component={ObjectRecognitionScreen} />
             <Stack.Screen name="LearningContent" component={LearningContentScreen} />

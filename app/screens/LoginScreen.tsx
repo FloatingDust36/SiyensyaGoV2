@@ -78,7 +78,7 @@ export default function LoginScreen({ navigation }: any) {
             }
             alert('Signed in successfully!');
         }
-        navigation.replace('MainTabs');
+        navigation.replace('GradeLevel');
     };
 
     const handleForgotPassword = () => {
@@ -92,7 +92,7 @@ export default function LoginScreen({ navigation }: any) {
 
     const handleGuest = () => {
         // Navigate to the main app tabs
-        navigation.replace('MainTabs');
+        navigation.replace('GradeLevel');
     };
 
     return (

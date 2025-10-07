@@ -23,6 +23,7 @@ export type AnalysisResult = {
 export type RootStackParamList = {
     Launch: undefined;
     Login: undefined;
+    GradeLevel: undefined;
     MainTabs: NavigatorScreenParams<TabParamList>;
     ObjectRecognition: { imageUri: string };
     LearningContent: {
