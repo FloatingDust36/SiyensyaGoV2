@@ -202,6 +202,7 @@ export default function ObjectRecognitionScreen() {
             const safeResult: AnalysisResult = {
                 objectName: String(result.objectName || 'Unknown Object'),
                 confidence: Number(result.confidence || 0),
+                category: String(result.category || 'No information available.'),
                 funFact: String(result.funFact || 'No information available.'),
                 the_science_in_action: String(result.the_science_in_action || 'No information available.'),
                 why_it_matters_to_you: String(result.why_it_matters_to_you || 'No information available.'),

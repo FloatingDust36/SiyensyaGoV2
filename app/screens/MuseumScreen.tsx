@@ -164,7 +164,7 @@ export default function MuseumScreen() {
                                 <View style={styles.cardFooter}>
                                     <View style={[styles.categoryBadge, { backgroundColor: 'rgba(0, 191, 255, 0.2)' }]}>
                                         <Text style={[styles.categoryBadgeText, { color: colors.primary }]}>
-                                            {item.category}
+                                            {item.category.charAt(0).toUpperCase() + item.category.slice(1)}
                                         </Text>
                                     </View>
                                     <Text style={styles.cardDate}>{item.dateSaved}</Text>
