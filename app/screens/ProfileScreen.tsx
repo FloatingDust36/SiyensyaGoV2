@@ -199,7 +199,7 @@ export default function ProfileScreen() {
                     </TouchableOpacity>
 
                     {/* Notifications */}
-                    <View style={styles.settingItem}>
+                    {/*<View style={styles.settingItem}>
                         <View style={styles.settingLeft}>
                             <Ionicons name="notifications-outline" size={24} color={colors.primary} />
                             <Text style={styles.settingText}>Notifications</Text>
@@ -210,10 +210,10 @@ export default function ProfileScreen() {
                             trackColor={{ false: '#1A1C2A', true: colors.primary }}
                             thumbColor={colors.text}
                         />
-                    </View>
+                    </View>*/}
 
                     {/* Sound Effects */}
-                    <View style={styles.settingItem}>
+                    {/*<View style={styles.settingItem}>
                         <View style={styles.settingLeft}>
                             <Ionicons name="volume-high-outline" size={24} color={colors.primary} />
                             <Text style={styles.settingText}>Sound Effects</Text>
@@ -224,7 +224,7 @@ export default function ProfileScreen() {
                             trackColor={{ false: '#1A1C2A', true: colors.primary }}
                             thumbColor={colors.text}
                         />
-                    </View>
+                    </View>*/}
 
                     {/* Language - Coming Soon */}
                     <TouchableOpacity
