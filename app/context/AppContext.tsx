@@ -2,6 +2,7 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import { AppContextType, Discovery, UserData, AppSettings, GradeLevel } from './types';
 import { StorageService } from '../services/storage';
+import { deleteImage } from '../services/imageStorage';
 
 // Default values
 const DEFAULT_USER: UserData = {
@@ -94,8 +95,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Remove Discovery
     const removeDiscovery = async (id: string) => {
         try {
+            // Find discovery to get image URI
+            const discovery = discoveries.find(d => d.id === id);
+
+            // Remove from storage
             await StorageService.removeDiscovery(id);
             setDiscoveries(prev => prev.filter(d => d.id !== id));
+
+            // Delete image file
+            if (discovery?.imageUri) {
+                await deleteImage(discovery.imageUri);
+            }
         } catch (error) {
             console.error('Error removing discovery:', error);
             throw error;
@@ -142,6 +152,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Clear All Data
     const clearAllData = async () => {
         try {
+            // Delete all images
+            for (const discovery of discoveries) {
+                if (discovery.imageUri) {
+                    await deleteImage(discovery.imageUri);
+                }
+            }
+
             await StorageService.clearAll();
             setUser(DEFAULT_USER);
             setDiscoveries([]);

@@ -164,7 +164,9 @@ export default function ProfileScreen() {
                             <Text style={styles.subjectsTitle}>Subject Distribution</Text>
                             {Object.entries(stats.subjectDistribution).map(([subject, count]) => (
                                 <View key={subject} style={styles.subjectRow}>
-                                    <Text style={styles.subjectName}>{subject}</Text>
+                                    <Text style={styles.subjectName}>
+                                        {subject.charAt(0).toUpperCase() + subject.slice(1)}
+                                    </Text>
                                     <View style={styles.subjectBar}>
                                         <View
                                             style={[

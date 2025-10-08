@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList, AnalysisResult } from '../navigation/types';
 import { colors, fonts } from '../theme/theme';
 import { useApp } from '../context/AppContext';
+import { saveImagePermanently } from '../services/imageStorage';
 
 type LearningContentRouteProp = RouteProp<RootStackParamList, 'LearningContent'>;
 type NavigationProp = StackNavigationProp<RootStackParamList>;
@@ -128,11 +129,14 @@ export default function LearningContentScreen() {
         }
 
         try {
+            // Save image permanently before adding discovery
+            const permanentImageUri = await saveImagePermanently(imageUri);
+
             await addDiscovery({
                 objectName: result.objectName,
                 confidence: result.confidence,
                 category: (result.category || 'General').toLowerCase(),
-                imageUri: imageUri,
+                imageUri: permanentImageUri, // Use permanent URI
                 funFact: result.funFact,
                 the_science_in_action: result.the_science_in_action,
                 why_it_matters_to_you: result.why_it_matters_to_you,
