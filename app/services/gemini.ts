@@ -28,19 +28,19 @@ export async function analyzeImageWithGemini(imageUri: string, userGradeLevel: s
 
         // Grade level context
         const gradeLevelContext = {
-            'Elementary': {
+            'elementary': {
                 audience: 'Grades K-6 students (ages 5-12)',
                 language: 'Use very simple Tagalog-English words. Short sentences (10-15 words max). Relate to toys, cartoons, and everyday play.',
                 complexity: 'Basic observations only. Use "parang" (like) comparisons with familiar things (like a toy, like a ball).',
                 depedFocus: 'Basic science process skills, observation, and simple cause-and-effect.'
             },
-            'Junior High': {
+            'juniorHigh': {
                 audience: 'Grades 7-10 students (ages 12-16)',
                 language: 'Mix of Filipino and English (natural code-switching). Teen-friendly tone. Reference pop culture, social media, trending topics.',
                 complexity: 'DepEd Science curriculum concepts. Include basic formulas and scientific terminology with Filipino translations.',
                 depedFocus: 'Force, motion, energy, matter, living things, earth science aligned with DepEd K-12 curriculum.'
             },
-            'Senior High': {
+            'seniorHigh': {
                 audience: 'Grades 11-12 students (ages 16-18, STEM track)',
                 language: 'More technical English with Filipino context. University-prep level. Reference careers and real-world applications.',
                 complexity: 'Advanced theories, formulas, research context. Connect to STEM careers and college pathways.',
@@ -48,7 +48,7 @@ export async function analyzeImageWithGemini(imageUri: string, userGradeLevel: s
             }
         };
 
-        const gradeContext = gradeLevelContext[userGradeLevel as keyof typeof gradeLevelContext] || gradeLevelContext['Junior High'];
+        const gradeContext = gradeLevelContext[userGradeLevel as keyof typeof gradeLevelContext] || gradeLevelContext['juniorHigh'];
 
         const prompt = `
 You are "SiyensyaGo AI" - an enthusiastic Filipino STEM educator who makes science relatable, fun, and culturally relevant for ${gradeContext.audience}.

@@ -8,6 +8,7 @@ import { RootStackParamList, AnalysisResult } from '../navigation/types';
 import { colors, fonts } from '../theme/theme';
 import { analyzeImageWithGemini } from '../services/gemini';
 import { Ionicons } from '@expo/vector-icons';
+import { useApp } from '../context/AppContext';
 
 type ObjectRecognitionScreenRouteProp = RouteProp<RootStackParamList, 'ObjectRecognition'>;
 type NavigationProp = StackNavigationProp<RootStackParamList>;
@@ -16,6 +17,8 @@ export default function ObjectRecognitionScreen() {
     const route = useRoute<ObjectRecognitionScreenRouteProp>();
     const navigation = useNavigation<NavigationProp>();
     const { imageUri } = route.params;
+    const { user } = useApp();
+
 
     const [isAnalyzing, setIsAnalyzing] = useState(true);
     const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -156,7 +159,7 @@ export default function ObjectRecognitionScreen() {
             const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
             const [analysisResult] = await Promise.all([
-                analyzeImageWithGemini(imageUri),
+                analyzeImageWithGemini(imageUri, user.gradeLevel),
                 delay(1500)
             ]);
 
