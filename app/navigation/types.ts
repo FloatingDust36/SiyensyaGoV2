@@ -12,6 +12,7 @@ export type TabParamList = {
 export type AnalysisResult = {
     objectName: string;
     confidence: number;
+    category: string;
     funFact: string;
     the_science_in_action: string;
     why_it_matters_to_you: string;

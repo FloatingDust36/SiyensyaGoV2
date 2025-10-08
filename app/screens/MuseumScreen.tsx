@@ -146,6 +146,7 @@ export default function MuseumScreen() {
                                 result: {
                                     objectName: item.objectName,
                                     confidence: item.confidence,
+                                    category: item.category,
                                     funFact: item.funFact,
                                     the_science_in_action: item.the_science_in_action,
                                     why_it_matters_to_you: item.why_it_matters_to_you,

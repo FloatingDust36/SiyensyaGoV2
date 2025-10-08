@@ -34,6 +34,7 @@ export default function LearningContentScreen() {
     const result = route.params?.result || {
         objectName: 'Unknown Object',
         confidence: 0,
+        category: 'No information available.',
         funFact: 'No information available.',
         the_science_in_action: 'No information available.',
         why_it_matters_to_you: 'No information available.',
@@ -130,7 +131,7 @@ export default function LearningContentScreen() {
             await addDiscovery({
                 objectName: result.objectName,
                 confidence: result.confidence,
-                category: 'General', // TODO: Add category detection in Gemini
+                category: (result.category || 'General').toLowerCase(),
                 imageUri: imageUri,
                 funFact: result.funFact,
                 the_science_in_action: result.the_science_in_action,
