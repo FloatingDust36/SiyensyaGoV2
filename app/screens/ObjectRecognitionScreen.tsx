@@ -19,7 +19,6 @@ export default function ObjectRecognitionScreen() {
     const { imageUri } = route.params;
     const { user } = useApp();
 
-
     const [isAnalyzing, setIsAnalyzing] = useState(true);
     const [result, setResult] = useState<AnalysisResult | null>(null);
     const [error, setError] = useState<string | null>(null);

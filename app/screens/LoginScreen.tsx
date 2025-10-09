@@ -1,9 +1,10 @@
 // In app/screens/LoginScreen.tsx
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Animated, KeyboardAvoidingView, Platform, ScrollView } from 'react-native'; // ADDED: Animated, KeyboardAvoidingView, Platform, ScrollView
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Animated, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts } from '../theme/theme';
+import { SupabaseAuth } from '../services/supabase';
 
 export default function LoginScreen({ navigation }: any) {
     const [isSignUp, setIsSignUp] = useState(false);
@@ -57,37 +58,60 @@ export default function LoginScreen({ navigation }: any) {
     };
 
     // Handle authentication
-    const handleAuth = () => {
-        // TODO: Implement actual authentication logic
+    const handleAuth = async () => {
         if (isSignUp) {
             // Sign up validation
             if (!fullName || !email || !password || !confirmPassword) {
-                alert('Please fill in all fields');
+                Alert.alert('Error', 'Please fill in all fields');
                 return;
             }
             if (password !== confirmPassword) {
-                alert('Passwords do not match');
+                Alert.alert('Error', 'Passwords do not match');
                 return;
             }
-            alert('Account created successfully!');
+            if (password.length < 6) {
+                Alert.alert('Error', 'Password must be at least 6 characters');
+                return;
+            }
+
+            try {
+                // Import at top: import { SupabaseAuth } from '../services/supabase';
+                await SupabaseAuth.signUp(email, password, fullName);
+                Alert.alert(
+                    'Success!',
+                    'Account created! Please check your email to verify your account.',
+                    [{ text: 'OK', onPress: () => navigation.replace('GradeLevel') }]
+                );
+            } catch (error: any) {
+                Alert.alert('Sign Up Error', error.message || 'Failed to create account');
+            }
         } else {
             // Sign in validation
             if (!email || !password) {
-                alert('Please enter email and password');
+                Alert.alert('Error', 'Please enter email and password');
                 return;
             }
-            alert('Signed in successfully!');
+
+            try {
+                await SupabaseAuth.signIn(email, password);
+                navigation.replace('GradeLevel');
+            } catch (error: any) {
+                Alert.alert('Sign In Error', error.message || 'Failed to sign in');
+            }
         }
-        navigation.replace('GradeLevel');
     };
 
     const handleForgotPassword = () => {
         alert('Password reset link sent to your email!');
     };
 
-    const handleSocialLogin = (provider: string) => {
-        alert(`${provider} login coming soon!`);
-        // TODO: Implement social login
+    const handleSocialLogin = async (provider: 'google' | 'facebook' | 'apple') => {
+        try {
+            await SupabaseAuth.signInWithOAuth(provider);
+            // OAuth will handle redirect automatically
+        } catch (error: any) {
+            Alert.alert('Error', error.message || `Failed to sign in with ${provider}`);
+        }
     };
 
     const handleGuest = () => {
@@ -234,19 +258,19 @@ export default function LoginScreen({ navigation }: any) {
                     <View style={styles.socialContainer}>
                         <TouchableOpacity
                             style={styles.socialButton}
-                            onPress={() => handleSocialLogin('Google')}
+                            onPress={() => handleSocialLogin('google')}
                         >
                             <Ionicons name="logo-google" size={24} color={colors.text} />
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={styles.socialButton}
-                            onPress={() => handleSocialLogin('Facebook')}
+                            onPress={() => handleSocialLogin('facebook')}
                         >
                             <Ionicons name="logo-facebook" size={24} color={colors.text} />
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={styles.socialButton}
-                            onPress={() => handleSocialLogin('Apple')}
+                            onPress={() => handleSocialLogin('apple')}
                         >
                             <Ionicons name="logo-apple" size={24} color={colors.text} />
                         </TouchableOpacity>

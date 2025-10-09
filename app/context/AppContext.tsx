@@ -1,8 +1,16 @@
-// In app/context/AppContext.tsx
+// app/context/AppContext.tsx
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import { AppContextType, Discovery, UserData, AppSettings, GradeLevel } from './types';
 import { StorageService } from '../services/storage';
 import { deleteImage } from '../services/imageStorage';
+import {
+    supabase,
+    SupabaseAuth,
+    SupabaseProfile,
+    SupabaseDiscoveries,
+    SupabaseStorage,
+    SupabaseSettings
+} from '../services/supabase';
 
 // Default values
 const DEFAULT_USER: UserData = {
@@ -26,30 +34,150 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [discoveries, setDiscoveries] = useState<Discovery[]>([]);
     const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
     const [isLoading, setIsLoading] = useState(true);
+    const [authUser, setAuthUser] = useState<any>(null);
+    const [isSyncing, setIsSyncing] = useState(false);
 
     // Load data on mount
     useEffect(() => {
         loadInitialData();
+        setupAuthListener();
     }, []);
+
+    // Setup Supabase auth listener
+    const setupAuthListener = () => {
+        const { data: authListener } = supabase.auth.onAuthStateChange(
+            async (event, session) => {
+                console.log('Auth event:', event);
+                setAuthUser(session?.user ?? null);
+
+                if (event === 'SIGNED_IN' && session?.user) {
+                    await handleUserSignIn(session.user);
+                } else if (event === 'SIGNED_OUT') {
+                    await handleUserSignOut();
+                }
+            }
+        );
+
+        return () => {
+            authListener.subscription.unsubscribe();
+        };
+    };
+
+    // Handle user sign in
+    const handleUserSignIn = async (supabaseUser: any) => {
+        try {
+            // Get profile from Supabase
+            const profile = await SupabaseProfile.getProfile(supabaseUser.id);
+
+            // Update local user state
+            const userData: UserData = {
+                isGuest: false,
+                userName: profile.user_name,
+                email: supabaseUser.email,
+                gradeLevel: profile.grade_level as GradeLevel,
+            };
+            setUser(userData);
+            await StorageService.saveUser(userData);
+
+            // Sync discoveries from cloud
+            await syncFromCloud(supabaseUser.id);
+
+            // Sync settings from cloud
+            await syncSettingsFromCloud(supabaseUser.id);
+        } catch (error) {
+            console.error('Error handling sign in:', error);
+        }
+    };
+
+    // Handle user sign out
+    const handleUserSignOut = async () => {
+        setUser(DEFAULT_USER);
+        await StorageService.saveUser(DEFAULT_USER);
+    };
+
+    // Sync discoveries from Supabase to local
+    const syncFromCloud = async (userId: string) => {
+        if (!userId) return;
+
+        setIsSyncing(true);
+        try {
+            const cloudDiscoveries = await SupabaseDiscoveries.getDiscoveries(userId);
+
+            // Convert Supabase format to local format
+            const localDiscoveries: Discovery[] = cloudDiscoveries.map((d: any) => ({
+                id: d.id,
+                objectName: d.object_name,
+                confidence: d.confidence,
+                category: d.category,
+                imageUri: SupabaseStorage.getImageUrl(d.image_path),
+                funFact: d.fun_fact,
+                the_science_in_action: d.the_science_in_action,
+                why_it_matters_to_you: d.why_it_matters_to_you,
+                tryThis: d.try_this,
+                explore_further: d.explore_further,
+                timestamp: new Date(d.created_at).getTime(),
+                dateSaved: new Date(d.created_at).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                }),
+            }));
+
+            setDiscoveries(localDiscoveries);
+            await StorageService.saveDiscoveries(localDiscoveries);
+
+            console.log(`✓ Synced ${localDiscoveries.length} discoveries from cloud`);
+        } catch (error) {
+            console.error('Sync from cloud error:', error);
+            // Fall back to local storage
+            const localDiscoveries = await StorageService.getDiscoveries();
+            setDiscoveries(localDiscoveries);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    // Sync settings from Supabase
+    const syncSettingsFromCloud = async (userId: string) => {
+        try {
+            const cloudSettings = await SupabaseSettings.getSettings(userId);
+            const localSettings: AppSettings = {
+                notificationsEnabled: cloudSettings.notifications_enabled,
+                soundEnabled: cloudSettings.sound_enabled,
+                language: cloudSettings.language as 'english' | 'filipino',
+            };
+            setSettings(localSettings);
+            await StorageService.saveSettings(localSettings);
+        } catch (error) {
+            console.error('Settings sync error:', error);
+        }
+    };
 
     const loadInitialData = async () => {
         try {
             setIsLoading(true);
 
-            // Load user
-            const savedUser = await StorageService.getUser();
-            if (savedUser) {
-                setUser(savedUser);
-            }
+            // Check for existing Supabase session
+            const session = await SupabaseAuth.getSession();
 
-            // Load discoveries
-            const savedDiscoveries = await StorageService.getDiscoveries();
-            setDiscoveries(savedDiscoveries);
+            if (session) {
+                // User is already logged in
+                setAuthUser(session.user);
+                await handleUserSignIn(session.user);
+            } else {
+                // Load from local storage (guest mode)
+                const savedUser = await StorageService.getUser();
+                if (savedUser) {
+                    setUser(savedUser);
+                }
 
-            // Load settings
-            const savedSettings = await StorageService.getSettings();
-            if (savedSettings) {
-                setSettings(savedSettings);
+                const savedDiscoveries = await StorageService.getDiscoveries();
+                setDiscoveries(savedDiscoveries);
+
+                const savedSettings = await StorageService.getSettings();
+                if (savedSettings) {
+                    setSettings(savedSettings);
+                }
             }
         } catch (error) {
             console.error('Error loading initial data:', error);
@@ -64,6 +192,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
             const updatedUser = { ...user, ...userData };
             setUser(updatedUser);
             await StorageService.saveUser(updatedUser);
+
+            // Sync to cloud if logged in
+            if (authUser && !updatedUser.isGuest) {
+                await SupabaseProfile.updateProfile(authUser.id, {
+                    user_name: updatedUser.userName,
+                    grade_level: updatedUser.gradeLevel,
+                });
+            }
         } catch (error) {
             console.error('Error updating user:', error);
             throw error;
@@ -84,8 +220,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 }),
             };
 
+            // Save locally first
             await StorageService.addDiscovery(newDiscovery);
             setDiscoveries(prev => [newDiscovery, ...prev]);
+
+            // Sync to cloud if logged in
+            if (authUser && !user.isGuest) {
+                try {
+                    // Upload image to Supabase Storage
+                    const imagePath = await SupabaseStorage.uploadImage(
+                        discoveryData.imageUri,
+                        authUser.id
+                    );
+
+                    // Save to Supabase database
+                    await SupabaseDiscoveries.addDiscovery(authUser.id, {
+                        object_name: newDiscovery.objectName,
+                        confidence: newDiscovery.confidence,
+                        category: newDiscovery.category,
+                        image_path: imagePath,
+                        fun_fact: newDiscovery.funFact,
+                        the_science_in_action: newDiscovery.the_science_in_action,
+                        why_it_matters_to_you: newDiscovery.why_it_matters_to_you,
+                        try_this: newDiscovery.tryThis,
+                        explore_further: newDiscovery.explore_further,
+                    });
+
+                    console.log('✓ Discovery synced to cloud');
+                } catch (cloudError) {
+                    console.error('Cloud sync error (discovery still saved locally):', cloudError);
+                }
+            }
         } catch (error) {
             console.error('Error adding discovery:', error);
             throw error;
@@ -95,16 +260,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Remove Discovery
     const removeDiscovery = async (id: string) => {
         try {
-            // Find discovery to get image URI
             const discovery = discoveries.find(d => d.id === id);
 
-            // Remove from storage
+            // Remove from local storage
             await StorageService.removeDiscovery(id);
             setDiscoveries(prev => prev.filter(d => d.id !== id));
 
-            // Delete image file
+            // Delete local image file
             if (discovery?.imageUri) {
                 await deleteImage(discovery.imageUri);
+            }
+
+            // Remove from cloud if logged in
+            if (authUser && !user.isGuest) {
+                try {
+                    await SupabaseDiscoveries.deleteDiscovery(id);
+                    // Note: Supabase Storage cleanup can be done with a database trigger
+                } catch (cloudError) {
+                    console.error('Cloud delete error:', cloudError);
+                }
             }
         } catch (error) {
             console.error('Error removing discovery:', error);
@@ -123,6 +297,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
             const updatedSettings = { ...settings, ...newSettings };
             setSettings(updatedSettings);
             await StorageService.saveSettings(updatedSettings);
+
+            // Sync to cloud if logged in
+            if (authUser && !user.isGuest) {
+                await SupabaseSettings.updateSettings(authUser.id, {
+                    notifications_enabled: updatedSettings.notificationsEnabled,
+                    sound_enabled: updatedSettings.soundEnabled,
+                    language: updatedSettings.language,
+                });
+            }
         } catch (error) {
             console.error('Error updating settings:', error);
             throw error;
@@ -143,7 +326,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         return {
             totalDiscoveries: discoveries.length,
-            streak: 0, // TODO: Calculate actual streak based on timestamps
+            streak: 0, // TODO: Calculate actual streak
             subjectDistribution,
             favoriteSubject,
         };
@@ -152,7 +335,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Clear All Data
     const clearAllData = async () => {
         try {
-            // Delete all images
+            // Delete all local images
             for (const discovery of discoveries) {
                 if (discovery.imageUri) {
                     await deleteImage(discovery.imageUri);
@@ -172,7 +355,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Sign Out
     const signOut = async () => {
         try {
-            // For now, just reset to guest
+            if (!user.isGuest && authUser) {
+                // Sign out from Supabase
+                await SupabaseAuth.signOut();
+            }
+
+            // Reset to guest
             const guestUser: UserData = {
                 isGuest: true,
                 userName: 'Guest Explorer',
@@ -180,6 +368,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             };
             setUser(guestUser);
             await StorageService.saveUser(guestUser);
+
+            // Clear discoveries for privacy
+            setDiscoveries([]);
+            await StorageService.saveDiscoveries([]);
         } catch (error) {
             console.error('Error signing out:', error);
             throw error;
@@ -198,7 +390,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         stats,
         clearAllData,
         signOut,
-        isLoading,
+        isLoading: isLoading || isSyncing,
     };
 
     return (
