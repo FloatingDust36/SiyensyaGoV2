@@ -1,7 +1,7 @@
 // app/services/supabase.ts
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 
 // ============================================
@@ -44,17 +44,20 @@ export const SupabaseAuth = {
 
         if (error) throw error;
 
-        // Create profile
-        if (data.user) {
-            const { error: profileError } = await supabase.from('profiles').insert({
-                id: data.user.id,
-                user_name: fullName,
-                grade_level: 'juniorHigh',
-                is_guest: false,
-            });
+        // Profile and settings are automatically created by database trigger
+        // No manual insertion needed
 
-            if (profileError) throw profileError;
-        }
+        // Create profile
+        // if (data.user) {
+        //     const { error: profileError } = await supabase.from('profiles').insert({
+        //         id: data.user.id,
+        //         user_name: fullName,
+        //         grade_level: 'juniorHigh',
+        //         is_guest: false,
+        //     });
+
+        //     if (profileError) throw profileError;
+        // }
 
         return data;
     },
