@@ -75,13 +75,36 @@ export default function LoginScreen({ navigation }: any) {
             }
 
             try {
-                // Import at top: import { SupabaseAuth } from '../services/supabase';
-                await SupabaseAuth.signUp(email, password, fullName);
-                Alert.alert(
-                    'Success!',
-                    'Account created! Please check your email to verify your account.',
-                    [{ text: 'OK', onPress: () => navigation.replace('GradeLevel') }]
-                );
+                const result = await SupabaseAuth.signUp(email, password, fullName);
+
+                // Check if email confirmation is required
+                if (result.user && !result.session) {
+                    // Email confirmation required - user must verify email first
+                    Alert.alert(
+                        'Success!',
+                        'Account created! Please check your email to verify your account before signing in.',
+                        [
+                            {
+                                text: 'OK',
+                                onPress: () => {
+                                    // Switch to sign in mode and clear form
+                                    setIsSignUp(false);
+                                    setEmail('');
+                                    setPassword('');
+                                    setConfirmPassword('');
+                                    setFullName('');
+                                }
+                            }
+                        ]
+                    );
+                } else if (result.session) {
+                    // Email confirmation disabled - user is signed in immediately
+                    Alert.alert(
+                        'Success!',
+                        'Account created successfully!',
+                        [{ text: 'OK', onPress: () => navigation.replace('GradeLevel') }]
+                    );
+                }
             } catch (error: any) {
                 Alert.alert('Sign Up Error', error.message || 'Failed to create account');
             }
@@ -94,6 +117,7 @@ export default function LoginScreen({ navigation }: any) {
 
             try {
                 await SupabaseAuth.signIn(email, password);
+                // Session is established, safe to navigate
                 navigation.replace('GradeLevel');
             } catch (error: any) {
                 Alert.alert('Sign In Error', error.message || 'Failed to sign in');

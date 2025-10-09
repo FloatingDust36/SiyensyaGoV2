@@ -266,18 +266,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
             await StorageService.removeDiscovery(id);
             setDiscoveries(prev => prev.filter(d => d.id !== id));
 
-            // Delete local image file
-            if (discovery?.imageUri) {
+            if (!discovery) return;
+
+            // Determine if image is local or cloud
+            const isCloudImage = discovery.imageUri.startsWith('http');
+
+            if (isCloudImage) {
+                // Cloud image - delete from Supabase Storage
+                if (authUser && !user.isGuest) {
+                    try {
+                        // Extract image path from URL
+                        // URL format: https://...supabase.co/storage/v1/object/public/discovery-images/{path}
+                        const urlParts = discovery.imageUri.split('/discovery-images/');
+                        if (urlParts[1]) {
+                            const imagePath = urlParts[1];
+                            await SupabaseStorage.deleteImage(imagePath);
+                            console.log('✓ Cloud image deleted:', imagePath);
+                        }
+                    } catch (cloudError) {
+                        console.error('Cloud delete error:', cloudError);
+                    }
+                }
+            } else {
+                // Local image - delete from device storage
                 await deleteImage(discovery.imageUri);
+                console.log('✓ Local image deleted');
             }
 
-            // Remove from cloud if logged in
+            // Remove from cloud database if logged in
             if (authUser && !user.isGuest) {
                 try {
                     await SupabaseDiscoveries.deleteDiscovery(id);
-                    // Note: Supabase Storage cleanup can be done with a database trigger
+                    console.log('✓ Discovery deleted from cloud database');
                 } catch (cloudError) {
-                    console.error('Cloud delete error:', cloudError);
+                    console.error('Cloud database delete error:', cloudError);
                 }
             }
         } catch (error) {
