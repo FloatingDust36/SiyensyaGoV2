@@ -59,4 +59,7 @@ export type AppContextType = {
 
     // Loading state
     isLoading: boolean;
+    isFirstLaunch: boolean;
+    isOnline: boolean;
+    syncStatus: string;
 };

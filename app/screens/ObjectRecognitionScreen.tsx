@@ -9,6 +9,7 @@ import { colors, fonts } from '../theme/theme';
 import { analyzeImageWithGemini } from '../services/gemini';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
+import * as Haptics from 'expo-haptics';
 
 type ObjectRecognitionScreenRouteProp = RouteProp<RootStackParamList, 'ObjectRecognition'>;
 type NavigationProp = StackNavigationProp<RootStackParamList>;
@@ -22,13 +23,25 @@ export default function ObjectRecognitionScreen() {
     const [isAnalyzing, setIsAnalyzing] = useState(true);
     const [result, setResult] = useState<AnalysisResult | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [loadingMessage, setLoadingMessage] = useState('Initializing AI scanner...');
 
     const scanProgress = useRef(new Animated.Value(0)).current;
     const pulseAnim = useRef(new Animated.Value(1)).current;
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const scaleAnim = useRef(new Animated.Value(0.8)).current;
     const rotateAnim = useRef(new Animated.Value(0)).current;
+
+    const loadingMessages = [
+        { icon: '🔍', text: 'Initializing AI scanner...' },
+        { icon: '📸', text: 'Analyzing image patterns...' },
+        { icon: '🧠', text: 'Detecting object features...' },
+        { icon: '🔬', text: 'Processing visual data...' },
+        { icon: '🎯', text: 'Identifying object type...' },
+        { icon: '📊', text: 'Calculating confidence score...' },
+        { icon: '✨', text: 'Almost there...' },
+    ];
+
+    const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
+    const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0]);
 
     // Particle animations
     const particleAnims = useRef(
@@ -42,21 +55,12 @@ export default function ObjectRecognitionScreen() {
 
     useEffect(() => {
         if (isAnalyzing) {
-            const messages = [
-                'Initializing AI scanner...',
-                'Analyzing image patterns...',
-                'Detecting object features...',
-                'Processing visual data...',
-                'Identifying object type...',
-                'Calculating confidence score...',
-                'Almost there...'
-            ];
-
             let currentIndex = 0;
             const messageInterval = setInterval(() => {
-                currentIndex = (currentIndex + 1) % messages.length;
-                setLoadingMessage(messages[currentIndex]);
-            }, 2000); // Change message every 2 seconds
+                currentIndex = (currentIndex + 1) % loadingMessages.length;
+                setCurrentMessageIndex(currentIndex);
+                setLoadingMessage(loadingMessages[currentIndex]);
+            }, 1500); // Faster rotation
 
             return () => clearInterval(messageInterval);
         }
@@ -166,6 +170,9 @@ export default function ObjectRecognitionScreen() {
                 setError(analysisResult.error);
             } else {
                 setResult(analysisResult as AnalysisResult);
+
+                // Success haptic
+                await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
                 // Fade in result animation
                 Animated.parallel([
@@ -294,7 +301,10 @@ export default function ObjectRecognitionScreen() {
                         </View>
 
                         <Text style={styles.statusText}>Analyzing...</Text>
-                        <Text style={styles.subStatusText}>{loadingMessage}</Text>
+                        <View style={styles.loadingMessageContainer}>
+                            <Text style={styles.loadingIcon}>{loadingMessage.icon}</Text>
+                            <Text style={styles.subStatusText}>{loadingMessage.text}</Text>
+                        </View>
 
                         {/* Progress bar */}
                         <View style={styles.progressBarContainer}>
@@ -612,5 +622,14 @@ const styles = StyleSheet.create({
         fontFamily: fonts.heading,
         color: colors.background,
         fontSize: 18,
+    },
+    loadingMessageContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginTop: 8,
+    },
+    loadingIcon: {
+        fontSize: 20,
     },
 });

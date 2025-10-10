@@ -10,6 +10,7 @@ import { RootStackParamList } from '../navigation/types';
 import { colors, fonts } from '../theme/theme';
 import * as ImagePicker from 'expo-image-picker';
 import { useApp } from '../context/AppContext';
+import * as Haptics from 'expo-haptics';
 
 type CameraNavigationProp = StackNavigationProp<RootStackParamList, 'MainTabs'>;
 
@@ -18,7 +19,7 @@ export default function CameraScreen() {
     const cameraRef = useRef<CameraView>(null);
     const navigation = useNavigation<CameraNavigationProp>();
     const isFocused = useIsFocused();
-    const { stats } = useApp();
+    const { stats, isOnline } = useApp();
 
     // State for camera controls
     const [facing, setFacing] = useState<'back' | 'front'>('back');
@@ -121,6 +122,12 @@ export default function CameraScreen() {
     const handleScan = async () => {
         if (cameraRef.current && !isScanning) {
             setIsScanning(true);
+
+            // Haptic feedback on scan
+            console.log('Triggering haptic feedback...'); // for testing
+            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            console.log('Haptic feedback triggered'); // for testing
+
             try {
                 const photo = await cameraRef.current.takePictureAsync({
                     quality: 0.7,
@@ -233,6 +240,14 @@ export default function CameraScreen() {
                     <Text style={styles.tipText}>Tip: Hold steady and ensure good lighting</Text>
                 </View>
             </View>
+
+            {/* Offline Indicator */}
+            {!isOnline && (
+                <View style={styles.offlineBanner}>
+                    <Ionicons name="cloud-offline-outline" size={16} color={colors.warning} />
+                    <Text style={styles.offlineText}>Offline - Discoveries will sync when connected</Text>
+                </View>
+            )}
 
             <View style={styles.cameraContainer}>
                 <View style={styles.controlsTop}>
@@ -762,5 +777,25 @@ const styles = StyleSheet.create({
         fontFamily: fonts.heading,
         fontSize: 18,
         color: colors.background,
+    },
+    offlineBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        backgroundColor: 'rgba(255, 69, 0, 0.15)',
+        paddingVertical: 8,
+        paddingHorizontal: 15,
+        marginHorizontal: 20,
+        marginTop: -10,
+        marginBottom: 10,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 69, 0, 0.3)',
+    },
+    offlineText: {
+        fontFamily: fonts.body,
+        fontSize: 12,
+        color: colors.warning,
     },
 });

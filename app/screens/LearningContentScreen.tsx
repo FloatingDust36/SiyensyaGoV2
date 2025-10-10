@@ -9,6 +9,7 @@ import { RootStackParamList, AnalysisResult } from '../navigation/types';
 import { colors, fonts } from '../theme/theme';
 import { useApp } from '../context/AppContext';
 import { saveImagePermanently } from '../services/imageStorage';
+import * as Haptics from 'expo-haptics';
 
 type LearningContentRouteProp = RouteProp<RootStackParamList, 'LearningContent'>;
 type NavigationProp = StackNavigationProp<RootStackParamList>;
@@ -143,6 +144,9 @@ export default function LearningContentScreen() {
                 tryThis: result.tryThis,
                 explore_further: result.explore_further,
             });
+
+            // Success haptic
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
             setIsSaved(true);
             Alert.alert(

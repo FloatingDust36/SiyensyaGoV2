@@ -1,4 +1,5 @@
 // app/context/AppContext.tsx
+import NetInfo from '@react-native-community/netinfo';
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import { AppContextType, Discovery, UserData, AppSettings, GradeLevel } from './types';
 import { StorageService } from '../services/storage';
@@ -30,17 +31,26 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // Provider Component
 export function AppProvider({ children }: { children: ReactNode }) {
+    const [isOnline, setIsOnline] = useState(true);
+    const [isFirstLaunch, setIsFirstLaunch] = useState<boolean>(true);
     const [user, setUser] = useState<UserData>(DEFAULT_USER);
     const [discoveries, setDiscoveries] = useState<Discovery[]>([]);
     const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
     const [isLoading, setIsLoading] = useState(true);
     const [authUser, setAuthUser] = useState<any>(null);
     const [isSyncing, setIsSyncing] = useState(false);
+    const [syncStatus, setSyncStatus] = useState<string>('');
 
     // Load data on mount
     useEffect(() => {
         loadInitialData();
-        setupAuthListener();
+        const authCleanup = setupAuthListener();
+        const networkCleanup = setupNetworkListener();
+
+        return () => {
+            authCleanup();
+            networkCleanup();
+        };
     }, []);
 
     // Setup Supabase auth listener
@@ -61,6 +71,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return () => {
             authListener.subscription.unsubscribe();
         };
+    };
+
+    // Setup network listener
+    const setupNetworkListener = () => {
+        const unsubscribe = NetInfo.addEventListener(state => {
+            const online = state.isConnected ?? false;
+            setIsOnline(online);
+
+            if (online) {
+                console.log('📡 Back online');
+            } else {
+                console.log('📡 Offline');
+            }
+        });
+
+        return unsubscribe;
     };
 
     // Handle user sign in
@@ -126,9 +152,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setDiscoveries(localDiscoveries);
             await StorageService.saveDiscoveries(localDiscoveries);
 
+            setSyncStatus('Sync complete!');
+            setTimeout(() => setSyncStatus(''), 2000);
+
             console.log(`✓ Synced ${localDiscoveries.length} discoveries from cloud`);
         } catch (error) {
             console.error('Sync from cloud error:', error);
+            setSyncStatus('Sync failed');
+            setTimeout(() => setSyncStatus(''), 3000);
             // Fall back to local storage
             const localDiscoveries = await StorageService.getDiscoveries();
             setDiscoveries(localDiscoveries);
@@ -164,11 +195,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 // User is already logged in
                 setAuthUser(session.user);
                 await handleUserSignIn(session.user);
+                setIsFirstLaunch(false);
             } else {
                 // Load from local storage (guest mode)
                 const savedUser = await StorageService.getUser();
                 if (savedUser) {
                     setUser(savedUser);
+                    setIsFirstLaunch(false);
                 }
 
                 const savedDiscoveries = await StorageService.getDiscoveries();
@@ -413,6 +446,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         clearAllData,
         signOut,
         isLoading: isLoading || isSyncing,
+        isFirstLaunch,
+        isOnline,
+        syncStatus,
     };
 
     return (

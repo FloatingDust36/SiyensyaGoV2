@@ -4,9 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 
-// ============================================
-// 1. CLIENT CONFIGURATION
-// ============================================
+// CLIENT CONFIGURATION
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -25,10 +23,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     },
 });
 
-// ============================================
-// 2. AUTHENTICATION FUNCTIONS
-// ============================================
-
+// AUTHENTICATION FUNCTIONS
 export const SupabaseAuth = {
     // Sign up with email
     async signUp(email: string, password: string, fullName: string) {
@@ -43,21 +38,6 @@ export const SupabaseAuth = {
         });
 
         if (error) throw error;
-
-        // Profile and settings are automatically created by database trigger
-        // No manual insertion needed
-
-        // Create profile
-        // if (data.user) {
-        //     const { error: profileError } = await supabase.from('profiles').insert({
-        //         id: data.user.id,
-        //         user_name: fullName,
-        //         grade_level: 'juniorHigh',
-        //         is_guest: false,
-        //     });
-
-        //     if (profileError) throw profileError;
-        // }
 
         return data;
     },
@@ -102,10 +82,7 @@ export const SupabaseAuth = {
     },
 };
 
-// ============================================
-// 3. PROFILE FUNCTIONS
-// ============================================
-
+// PROFILE FUNCTIONS
 export const SupabaseProfile = {
     // Get user profile
     async getProfile(userId: string) {
@@ -123,6 +100,7 @@ export const SupabaseProfile = {
     async updateProfile(userId: string, updates: {
         user_name?: string;
         grade_level?: string;
+        has_completed_onboarding?: boolean;
     }) {
         const { data, error } = await supabase
             .from('profiles')
@@ -139,10 +117,7 @@ export const SupabaseProfile = {
     },
 };
 
-// ============================================
-// 4. IMAGE STORAGE FUNCTIONS
-// ============================================
-
+// IMAGE STORAGE FUNCTIONS
 export const SupabaseStorage = {
     // Upload image to Supabase Storage
     async uploadImage(localUri: string, userId: string): Promise<string> {
@@ -192,10 +167,7 @@ export const SupabaseStorage = {
     },
 };
 
-// ============================================
-// 5. DISCOVERIES FUNCTIONS
-// ============================================
-
+// DISCOVERIES FUNCTIONS
 export const SupabaseDiscoveries = {
     // Get all discoveries for user
     async getDiscoveries(userId: string) {
@@ -257,10 +229,7 @@ export const SupabaseDiscoveries = {
     },
 };
 
-// ============================================
-// 6. SETTINGS FUNCTIONS
-// ============================================
-
+// SETTINGS FUNCTIONS
 export const SupabaseSettings = {
     // Get user settings
     async getSettings(userId: string) {

@@ -1,6 +1,6 @@
 // In app/screens/MuseumScreen.tsx
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, Dimensions, ActivityIndicator } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,7 +22,7 @@ const CATEGORIES = [
 ];
 
 export default function MuseumScreen() {
-    const { discoveries } = useApp();
+    const { discoveries, syncStatus } = useApp();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('all');
     const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
@@ -98,6 +98,12 @@ export default function MuseumScreen() {
                         </TouchableOpacity>
                     ))}
                 </ScrollView>
+                {syncStatus && (
+                    <View style={styles.syncIndicator}>
+                        <ActivityIndicator size="small" color={colors.primary} />
+                        <Text style={styles.syncText}>{syncStatus}</Text>
+                    </View>
+                )}
             </View>
 
             {/* Content Area */}
@@ -379,5 +385,20 @@ const styles = StyleSheet.create({
         fontFamily: fonts.body,
         fontSize: 11,
         color: colors.lightGray,
+    },
+    syncIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: 'rgba(0, 191, 255, 0.1)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 12,
+        marginTop: 10,
+    },
+    syncText: {
+        fontFamily: fonts.body,
+        fontSize: 12,
+        color: colors.primary,
     },
 });

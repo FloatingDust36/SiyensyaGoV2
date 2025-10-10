@@ -1,6 +1,6 @@
 // In app/screens/GradeLevelScreen.tsx
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -68,18 +68,41 @@ export default function GradeLevelScreen() {
         setIsProcessing(true);
         try {
             await updateUser({ gradeLevel: selectedLevel });
+
+            // Mark onboarding as complete
+            const { SupabaseProfile, SupabaseAuth } = require('../services/supabase');
+            const session = await SupabaseAuth.getSession();
+
+            if (session?.user) {
+                await SupabaseProfile.updateProfile(session.user.id, {
+                    grade_level: selectedLevel,
+                    has_completed_onboarding: true,
+                });
+            }
+
             navigation.replace('MainTabs', { screen: 'Camera' });
         } catch (error) {
             console.error('Error saving grade level:', error);
+            Alert.alert('Error', 'Failed to save grade level. Please try again.');
         } finally {
             setIsProcessing(false);
         }
     };
 
     const handleSkip = async () => {
-        // Use default (Junior High)
         try {
             await updateUser({ gradeLevel: 'juniorHigh' });
+
+            // Mark onboarding as complete even if skipped
+            const { SupabaseProfile, SupabaseAuth } = require('../services/supabase');
+            const session = await SupabaseAuth.getSession();
+
+            if (session?.user) {
+                await SupabaseProfile.updateProfile(session.user.id, {
+                    has_completed_onboarding: true,
+                });
+            }
+
             navigation.replace('MainTabs', { screen: 'Camera' });
         } catch (error) {
             console.error('Error:', error);

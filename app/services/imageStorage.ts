@@ -1,5 +1,6 @@
 // In app/services/imageStorage.ts
 import * as FileSystem from 'expo-file-system/legacy';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 
 const IMAGES_DIR = `${FileSystem.documentDirectory}siyensyago_images/`;
 
@@ -11,22 +12,29 @@ async function ensureImageDirectory() {
     }
 }
 
-// Copy image from cache to permanent storage
+// Copy image from cache to permanent storage with compression
 export async function saveImagePermanently(tempUri: string): Promise<string> {
     try {
         await ensureImageDirectory();
+
+        // Compress image to reduce size
+        const compressed = await manipulateAsync(
+            tempUri,
+            [{ resize: { width: 1024 } }], // Resize to max 1024px width
+            { compress: 0.7, format: SaveFormat.JPEG }
+        );
 
         // Generate unique filename
         const filename = `discovery_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
         const permanentUri = `${IMAGES_DIR}${filename}`;
 
-        // Copy file
+        // Copy compressed file
         await FileSystem.copyAsync({
-            from: tempUri,
+            from: compressed.uri,
             to: permanentUri,
         });
 
-        console.log('✓ Image saved permanently:', permanentUri);
+        console.log('✓ Image saved and compressed:', permanentUri);
         return permanentUri;
     } catch (error) {
         console.error('Error saving image:', error);

@@ -77,35 +77,64 @@ export default function LoginScreen({ navigation }: any) {
             try {
                 const result = await SupabaseAuth.signUp(email, password, fullName);
 
-                // Check if email confirmation is required
-                if (result.user && !result.session) {
-                    // Email confirmation required - user must verify email first
-                    Alert.alert(
-                        'Success!',
-                        'Account created! Please check your email to verify your account before signing in.',
-                        [
-                            {
-                                text: 'OK',
-                                onPress: () => {
-                                    // Switch to sign in mode and clear form
-                                    setIsSignUp(false);
-                                    setEmail('');
-                                    setPassword('');
-                                    setConfirmPassword('');
-                                    setFullName('');
+                // Supabase behavior:
+                // - Duplicate email: Returns user with confirmed_at set (already confirmed)
+                // - New email: Returns user with confirmed_at null (needs verification)
+                // - Failed: Returns no user
+
+                if (result.user) {
+                    // Check if this is actually a duplicate by checking confirmed_at
+                    if (result.user.confirmed_at && !result.session) {
+                        // User already exists and is confirmed, but no session (duplicate signup attempt)
+                        Alert.alert(
+                            'Account Already Exists',
+                            'This email is already registered. Would you like to sign in instead?',
+                            [
+                                {
+                                    text: 'Sign In',
+                                    onPress: () => {
+                                        setIsSignUp(false);
+                                        // Keep email, clear passwords
+                                        setPassword('');
+                                        setConfirmPassword('');
+                                        setFullName('');
+                                    }
+                                },
+                                { text: 'Cancel', style: 'cancel' }
+                            ]
+                        );
+                    } else if (!result.session) {
+                        // New user, needs verification
+                        Alert.alert(
+                            'Success!',
+                            'Account created! Please check your email to verify your account before signing in.',
+                            [
+                                {
+                                    text: 'OK',
+                                    onPress: () => {
+                                        setIsSignUp(false);
+                                        setEmail('');
+                                        setPassword('');
+                                        setConfirmPassword('');
+                                        setFullName('');
+                                    }
                                 }
-                            }
-                        ]
-                    );
-                } else if (result.session) {
-                    // Email confirmation disabled - user is signed in immediately
-                    Alert.alert(
-                        'Success!',
-                        'Account created successfully!',
-                        [{ text: 'OK', onPress: () => navigation.replace('GradeLevel') }]
-                    );
+                            ]
+                        );
+                    } else {
+                        // Has session - email verification disabled
+                        Alert.alert(
+                            'Success!',
+                            'Account created successfully!',
+                            [{ text: 'OK', onPress: () => navigation.replace('GradeLevel') }]
+                        );
+                    }
+                } else {
+                    // No user returned - something went wrong
+                    Alert.alert('Error', 'Unable to create account. Please try again.');
                 }
             } catch (error: any) {
+                console.error('Signup error:', error);
                 Alert.alert('Sign Up Error', error.message || 'Failed to create account');
             }
         } else {
@@ -117,8 +146,29 @@ export default function LoginScreen({ navigation }: any) {
 
             try {
                 await SupabaseAuth.signIn(email, password);
-                // Session is established, safe to navigate
-                navigation.replace('GradeLevel');
+
+                // Check if user has completed onboarding
+                const { SupabaseProfile } = require('../services/supabase');
+                const session = await SupabaseAuth.getSession();
+
+                if (session?.user) {
+                    try {
+                        const profile = await SupabaseProfile.getProfile(session.user.id);
+
+                        if (profile.has_completed_onboarding) {
+                            // Returning user - skip GradeLevelScreen
+                            navigation.replace('MainTabs', { screen: 'Camera' });
+                        } else {
+                            // First time signing in - show GradeLevelScreen
+                            navigation.replace('GradeLevel');
+                        }
+                    } catch (error) {
+                        // Default to showing GradeLevelScreen on error
+                        navigation.replace('GradeLevel');
+                    }
+                } else {
+                    navigation.replace('GradeLevel');
+                }
             } catch (error: any) {
                 Alert.alert('Sign In Error', error.message || 'Failed to sign in');
             }
