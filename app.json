@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "SiyensyaGoV2",
+    "name": "SiyensyaGo",
     "slug": "SiyensyaGoV2",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -13,9 +13,12 @@
       "backgroundColor": "#0D0F18"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.phantomdragon.siyensyago"
     },
     "android": {
+      "package": "com.phantomdragon.siyensyago",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0D0F18"
@@ -25,13 +28,22 @@
       "navigationBar": {
         "backgroundColor": "#0D0F18",
         "barStyle": "light-content"
-      }
+      },
+      "permissions": [
+        "CAMERA",
+        "READ_MEDIA_IMAGES"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "96a2ba76-30b6-4ffe-bf78-18a2a881199a"
+      }
+    }
   }
 }

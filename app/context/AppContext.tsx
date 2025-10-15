@@ -309,7 +309,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 if (authUser && !user.isGuest) {
                     try {
                         // Extract image path from URL
-                        // URL format: https://...supabase.co/storage/v1/object/public/discovery-images/{path}
                         const urlParts = discovery.imageUri.split('/discovery-images/');
                         if (urlParts[1]) {
                             const imagePath = urlParts[1];
