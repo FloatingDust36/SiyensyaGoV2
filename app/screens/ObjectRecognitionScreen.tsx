@@ -4,11 +4,10 @@ import { View, Text, StyleSheet, Image, ActivityIndicator, TouchableOpacity, Ani
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList, AnalysisResult } from '../navigation/types';
+import { RootStackParamList } from '../navigation/types';
 import { colors, fonts } from '../theme/theme';
-import { analyzeImageWithGemini } from '../services/gemini';
+import { detectObjectsInImage } from '../services/gemini';
 import { Ionicons } from '@expo/vector-icons';
-import { useApp } from '../context/AppContext';
 import * as Haptics from 'expo-haptics';
 
 type ObjectRecognitionScreenRouteProp = RouteProp<RootStackParamList, 'ObjectRecognition'>;
@@ -18,30 +17,13 @@ export default function ObjectRecognitionScreen() {
     const route = useRoute<ObjectRecognitionScreenRouteProp>();
     const navigation = useNavigation<NavigationProp>();
     const { imageUri } = route.params;
-    const { user } = useApp();
 
-    const [isAnalyzing, setIsAnalyzing] = useState(true);
-    const [result, setResult] = useState<AnalysisResult | null>(null);
+    const [isDetecting, setIsDetecting] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     const scanProgress = useRef(new Animated.Value(0)).current;
     const pulseAnim = useRef(new Animated.Value(1)).current;
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    const scaleAnim = useRef(new Animated.Value(0.8)).current;
     const rotateAnim = useRef(new Animated.Value(0)).current;
-
-    const loadingMessages = [
-        { icon: '🔍', text: 'Initializing AI scanner...' },
-        { icon: '📸', text: 'Analyzing image patterns...' },
-        { icon: '🧠', text: 'Detecting object features...' },
-        { icon: '🔬', text: 'Processing visual data...' },
-        { icon: '🎯', text: 'Identifying object type...' },
-        { icon: '📊', text: 'Calculating confidence score...' },
-        { icon: '✨', text: 'Almost there...' },
-    ];
-
-    const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
-    const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0]);
 
     // Particle animations
     const particleAnims = useRef(
@@ -54,22 +36,9 @@ export default function ObjectRecognitionScreen() {
     ).current;
 
     useEffect(() => {
-        if (isAnalyzing) {
-            let currentIndex = 0;
-            const messageInterval = setInterval(() => {
-                currentIndex = (currentIndex + 1) % loadingMessages.length;
-                setCurrentMessageIndex(currentIndex);
-                setLoadingMessage(loadingMessages[currentIndex]);
-            }, 1500); // Faster rotation
-
-            return () => clearInterval(messageInterval);
-        }
-    }, [isAnalyzing]);
-
-    useEffect(() => {
-        // Start analyzing animations
-        if (isAnalyzing) {
-            // Progress bar animation
+        // Start animations
+        if (isDetecting) {
+            // Progress bar
             Animated.loop(
                 Animated.sequence([
                     Animated.timing(scanProgress, {
@@ -85,7 +54,7 @@ export default function ObjectRecognitionScreen() {
                 ])
             ).start();
 
-            // Pulse animation
+            // Pulse
             Animated.loop(
                 Animated.sequence([
                     Animated.timing(pulseAnim, {
@@ -101,7 +70,7 @@ export default function ObjectRecognitionScreen() {
                 ])
             ).start();
 
-            // Rotation animation
+            // Rotation
             Animated.loop(
                 Animated.timing(rotateAnim, {
                     toValue: 1,
@@ -110,7 +79,7 @@ export default function ObjectRecognitionScreen() {
                 })
             ).start();
 
-            // Particle animations
+            // Particles
             particleAnims.forEach((particle, index) => {
                 const angle = (index / particleAnims.length) * Math.PI * 2;
                 const distance = 60;
@@ -156,46 +125,36 @@ export default function ObjectRecognitionScreen() {
             });
         }
 
-        const performAnalysis = async () => {
+        const performDetection = async () => {
             if (!imageUri) return;
 
             const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
-            const [analysisResult] = await Promise.all([
-                analyzeImageWithGemini(imageUri, user.gradeLevel),
-                delay(1500)
+            const [detectionResult] = await Promise.all([
+                detectObjectsInImage(imageUri),
+                delay(1500) // Minimum display time for UX
             ]);
 
-            if ('error' in analysisResult) {
-                setError(analysisResult.error);
-            } else {
-                setResult(analysisResult as AnalysisResult);
-
+            if ('error' in detectionResult) {
+                setError(detectionResult.error);
+            } else if (detectionResult.objects && detectionResult.objects.length > 0) {
                 // Success haptic
                 await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-                // Fade in result animation
-                Animated.parallel([
-                    Animated.timing(fadeAnim, {
-                        toValue: 1,
-                        duration: 500,
-                        useNativeDriver: true,
-                    }),
-                    Animated.spring(scaleAnim, {
-                        toValue: 1,
-                        tension: 50,
-                        friction: 7,
-                        useNativeDriver: true,
-                    }),
-                ]).start();
+                // Navigate to object selection
+                navigation.replace('ObjectSelection', {
+                    imageUri,
+                    detectedObjects: detectionResult.objects
+                });
+            } else {
+                setError('No objects detected in the image. Please try again with a clearer photo.');
             }
-            setIsAnalyzing(false);
+            setIsDetecting(false);
         };
 
-        performAnalysis();
+        performDetection();
     }, [imageUri]);
 
-    // Animation interpolations
     const progressWidth = scanProgress.interpolate({
         inputRange: [0, 1],
         outputRange: ['0%', '100%'],
@@ -206,22 +165,6 @@ export default function ObjectRecognitionScreen() {
         outputRange: ['0deg', '360deg'],
     });
 
-    const handleConfirm = () => {
-        if (result) {
-            const safeResult: AnalysisResult = {
-                objectName: String(result.objectName || 'Unknown Object'),
-                confidence: Number(result.confidence || 0),
-                category: String(result.category || 'No information available.'),
-                funFact: String(result.funFact || 'No information available.'),
-                the_science_in_action: String(result.the_science_in_action || 'No information available.'),
-                why_it_matters_to_you: String(result.why_it_matters_to_you || 'No information available.'),
-                tryThis: String(result.tryThis || 'No information available.'),
-                explore_further: String(result.explore_further || 'No information available.'),
-            };
-            navigation.replace('LearningContent', { imageUri, result: safeResult });
-        }
-    };
-
     const handleRetake = () => {
         navigation.goBack();
     };
@@ -231,14 +174,12 @@ export default function ObjectRecognitionScreen() {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={[styles.content, { justifyContent: 'center' }]}>
-                    {/* Animated error icon */}
                     <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
                         <Ionicons name="alert-circle-outline" size={100} color={colors.warning} />
                     </Animated.View>
-                    <Text style={styles.errorTitle}>Analysis Failed</Text>
+                    <Text style={styles.errorTitle}>Detection Failed</Text>
                     <Text style={styles.errorText}>{error}</Text>
 
-                    {/* Error suggestions */}
                     <View style={styles.errorSuggestions}>
                         <Text style={styles.suggestionTitle}>Try these solutions:</Text>
                         <View style={styles.suggestionItem}>
@@ -247,11 +188,11 @@ export default function ObjectRecognitionScreen() {
                         </View>
                         <View style={styles.suggestionItem}>
                             <Ionicons name="checkmark-circle-outline" size={20} color={colors.primary} />
-                            <Text style={styles.suggestionText}>Hold camera steady</Text>
+                            <Text style={styles.suggestionText}>Focus on clear objects</Text>
                         </View>
                         <View style={styles.suggestionItem}>
                             <Ionicons name="checkmark-circle-outline" size={20} color={colors.primary} />
-                            <Text style={styles.suggestionText}>Get closer to object</Text>
+                            <Text style={styles.suggestionText}>Avoid blurry photos</Text>
                         </View>
                     </View>
 
@@ -264,118 +205,46 @@ export default function ObjectRecognitionScreen() {
         );
     }
 
-    // Main View
+    // Loading State
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.content}>
-                {/* Image with border and glow */}
                 <View style={styles.imageContainer}>
                     <Image source={{ uri: imageUri }} style={styles.image} />
                 </View>
 
-                {isAnalyzing ? (
-                    <View style={styles.statusContainer}>
-                        {/* Particle effects around loading indicator */}
-                        <View style={styles.particleContainer}>
-                            {particleAnims.map((particle, index) => (
-                                <Animated.View
-                                    key={index}
-                                    style={[
-                                        styles.particle,
-                                        {
-                                            transform: [
-                                                { translateX: particle.x },
-                                                { translateY: particle.y },
-                                                { scale: particle.scale },
-                                            ],
-                                            opacity: particle.opacity,
-                                        },
-                                    ]}
-                                />
-                            ))}
-
-                            {/* Animated loading indicator */}
-                            <Animated.View style={{ transform: [{ rotate: spin }] }}>
-                                <Ionicons name="scan-circle-outline" size={60} color={colors.primary} />
-                            </Animated.View>
-                        </View>
-
-                        <Text style={styles.statusText}>Analyzing...</Text>
-                        <View style={styles.loadingMessageContainer}>
-                            <Text style={styles.loadingIcon}>{loadingMessage.icon}</Text>
-                            <Text style={styles.subStatusText}>{loadingMessage.text}</Text>
-                        </View>
-
-                        {/* Progress bar */}
-                        <View style={styles.progressBarContainer}>
-                            <Animated.View style={[styles.progressBar, { width: progressWidth }]} />
-                        </View>
-                    </View>
-                ) : (
-                    // Result with fade-in animation
-                    <Animated.View
-                        style={[
-                            styles.statusContainer,
-                            {
-                                opacity: fadeAnim,
-                                transform: [{ scale: scaleAnim }]
-                            }
-                        ]}
-                    >
-                        {/* Success icon with confidence indicator */}
-                        <View style={styles.resultIconContainer}>
-                            <Ionicons
-                                name={(result?.confidence ?? 0) >= 75 ? "checkmark-circle" : "help-circle"}
-                                size={60}
-                                color={(result?.confidence ?? 0) >= 75 ? colors.success : colors.warning}
+                <View style={styles.statusContainer}>
+                    <View style={styles.particleContainer}>
+                        {particleAnims.map((particle, index) => (
+                            <Animated.View
+                                key={index}
+                                style={[
+                                    styles.particle,
+                                    {
+                                        transform: [
+                                            { translateX: particle.x },
+                                            { translateY: particle.y },
+                                            { scale: particle.scale },
+                                        ],
+                                        opacity: particle.opacity,
+                                    },
+                                ]}
                             />
-                            {/* Confidence ring */}
-                            <View style={styles.confidenceRing}>
-                                <Text style={styles.confidencePercentage}>{result?.confidence}%</Text>
-                            </View>
-                        </View>
+                        ))}
 
-                        <Text style={styles.promptText}>
-                            {(result?.confidence ?? 0) >= 75 ? "I found:" : "I think this is:"}
-                        </Text>
-                        <Text style={styles.objectName}>{result?.objectName}</Text>
+                        <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                            <Ionicons name="scan-circle-outline" size={60} color={colors.primary} />
+                        </Animated.View>
+                    </View>
 
-                        {/* Enhanced confidence display */}
-                        <View style={styles.confidenceContainer}>
-                            <View style={styles.confidenceBadge}>
-                                <Ionicons
-                                    name={(result?.confidence ?? 0) >= 75 ? "shield-checkmark" : "information-circle"}
-                                    size={20}
-                                    color={(result?.confidence ?? 0) >= 75 ? colors.success : colors.warning}
-                                />
-                                <Text style={[
-                                    styles.confidenceText,
-                                    { color: (result?.confidence ?? 0) >= 75 ? colors.success : colors.warning }
-                                ]}>
-                                    {(result?.confidence ?? 0) >= 75 ? 'High Confidence' : 'Moderate Confidence'}
-                                </Text>
-                            </View>
-                        </View>
+                    <Text style={styles.statusText}>Detecting Objects...</Text>
+                    <Text style={styles.subStatusText}>Identifying items in your photo</Text>
 
-                    </Animated.View>
-                )}
-            </View>
-
-            {!isAnalyzing && (
-                <View style={styles.footer}>
-                    <Text style={styles.confirmPrompt}>Is this correct?</Text>
-                    <View style={styles.buttonContainer}>
-                        <TouchableOpacity style={styles.noButton} onPress={handleRetake}>
-                            <Ionicons name="close" size={24} color={colors.warning} />
-                            <Text style={styles.noButtonText}>No, Retake</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.yesButton} onPress={handleConfirm}>
-                            <Ionicons name="checkmark" size={24} color={colors.background} />
-                            <Text style={styles.yesButtonText}>Yes, Continue</Text>
-                        </TouchableOpacity>
+                    <View style={styles.progressBarContainer}>
+                        <Animated.View style={[styles.progressBar, { width: progressWidth }]} />
                     </View>
                 </View>
-            )}
+            </View>
         </SafeAreaView>
     );
 }
@@ -399,7 +268,6 @@ const styles = StyleSheet.create({
         marginBottom: 10,
         marginTop: 10,
         overflow: 'hidden',
-        position: 'relative',
     },
     image: {
         width: '100%',
@@ -458,109 +326,6 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.8,
         shadowRadius: 4,
         elevation: 3,
-    },
-    resultIconContainer: {
-        position: 'relative',
-        marginBottom: 10,
-    },
-    confidenceRing: {
-        position: 'absolute',
-        bottom: -5,
-        right: -5,
-        width: 35,
-        height: 35,
-        borderRadius: 17.5,
-        backgroundColor: colors.background,
-        borderWidth: 2,
-        borderColor: colors.primary,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    confidencePercentage: {
-        fontFamily: fonts.heading,
-        fontSize: 10,
-        color: colors.primary,
-    },
-    promptText: {
-        fontFamily: fonts.body,
-        color: colors.lightGray,
-        fontSize: 18,
-    },
-    objectName: {
-        fontFamily: fonts.heading,
-        color: colors.text,
-        fontSize: 32,
-        textAlign: 'center',
-        marginVertical: 5,
-    },
-    confidenceContainer: {
-        marginTop: 10,
-    },
-    confidenceBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        backgroundColor: 'rgba(0, 191, 255, 0.1)',
-        paddingHorizontal: 15,
-        paddingVertical: 8,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(0, 191, 255, 0.3)',
-    },
-    confidenceText: {
-        fontFamily: fonts.heading,
-        fontSize: 14,
-    },
-    footer: {
-        paddingHorizontal: 20,
-        paddingBottom: 40,
-    },
-    confirmPrompt: {
-        fontFamily: fonts.heading,
-        color: colors.primary,
-        fontSize: 18,
-        textAlign: 'center',
-        marginBottom: 15,
-    },
-    buttonContainer: {
-        flexDirection: 'row',
-        gap: 15,
-    },
-    noButton: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 10,
-        paddingVertical: 18,
-        borderRadius: 30,
-        borderWidth: 2,
-        borderColor: colors.warning,
-    },
-    noButtonText: {
-        fontFamily: fonts.heading,
-        color: colors.warning,
-        fontSize: 12,
-    },
-    yesButton: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 10,
-        paddingVertical: 18,
-        borderRadius: 30,
-        backgroundColor: colors.primary,
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 5,
-    },
-    yesButtonText: {
-        fontFamily: fonts.heading,
-        color: colors.background,
-        fontSize: 12,
     },
     errorTitle: {
         fontFamily: fonts.heading,
@@ -622,14 +387,5 @@ const styles = StyleSheet.create({
         fontFamily: fonts.heading,
         color: colors.background,
         fontSize: 18,
-    },
-    loadingMessageContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        marginTop: 8,
-    },
-    loadingIcon: {
-        fontSize: 20,
     },
 });

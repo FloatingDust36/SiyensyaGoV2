@@ -27,9 +27,31 @@ export type RootStackParamList = {
     GradeLevel: undefined;
     MainTabs: NavigatorScreenParams<TabParamList>;
     ObjectRecognition: { imageUri: string };
+    ObjectSelection: {
+        imageUri: string;
+        detectedObjects: DetectedObject[];
+    };
+
     LearningContent: {
         imageUri: string;
         result: AnalysisResult;
         discoveryId?: string; // Optional: if viewing from Museum
     };
+};
+
+export type DetectedObject = {
+    name: string;
+    confidence: number;
+    boundingBox: {
+        x: number;      // Percentage (0-100)
+        y: number;      // Percentage (0-100)
+        width: number;  // Percentage (0-100)
+        height: number; // Percentage (0-100)
+    };
+};
+
+export type ObjectDetectionResult = {
+    objects: DetectedObject[];
+    imageWidth: number;
+    imageHeight: number;
 };

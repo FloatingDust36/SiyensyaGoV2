@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -25,10 +25,6 @@
       },
       "edgeToEdgeEnabled": false,
       "predictiveBackGestureEnabled": false,
-      "navigationBar": {
-        "backgroundColor": "#0D0F18",
-        "barStyle": "light-content"
-      },
       "permissions": [
         "CAMERA",
         "READ_MEDIA_IMAGES"
@@ -38,7 +34,19 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow SiyensyaGo to access your camera to scan objects and discover science."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow SiyensyaGo to access your photos to analyze images."
+        }
+      ]
     ],
     "extra": {
       "eas": {
