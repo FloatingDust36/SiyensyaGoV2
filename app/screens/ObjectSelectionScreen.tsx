@@ -1,6 +1,6 @@
 // In app/screens/ObjectSelectionScreen.tsx
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -31,23 +31,28 @@ export default function ObjectSelectionScreen() {
         setImageLayout({ width, height, x, y });
     };
 
-    const handleObjectSelect = async (object: DetectedObject) => {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const handleBoxTap = async (object: DetectedObject) => {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         setSelectedObject(object);
+    };
+
+    const handleObjectConfirm = async () => {
+        if (!selectedObject) return;
+
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         setIsAnalyzing(true);
 
         try {
             const result = await analyzeSelectedObject(
                 imageUri,
-                object.name,
-                object.boundingBox,
+                selectedObject.name,
+                selectedObject.boundingBox,
                 user.gradeLevel
             );
 
             if ('error' in result) {
                 Alert.alert('Analysis Error', result.error);
                 setIsAnalyzing(false);
-                setSelectedObject(null);
                 return;
             }
 
@@ -56,7 +61,7 @@ export default function ObjectSelectionScreen() {
 
             // Navigate to learning content
             const safeResult: AnalysisResult = {
-                objectName: String(result.objectName || object.name),
+                objectName: String(result.objectName || selectedObject.name),
                 confidence: Number(result.confidence || 85),
                 category: String(result.category || 'General'),
                 funFact: String(result.funFact || 'No information available.'),
@@ -71,7 +76,6 @@ export default function ObjectSelectionScreen() {
             console.error('Error analyzing object:', error);
             Alert.alert('Error', 'Failed to analyze object. Please try again.');
             setIsAnalyzing(false);
-            setSelectedObject(null);
         }
     };
 
@@ -80,15 +84,15 @@ export default function ObjectSelectionScreen() {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            {/* Header */}
+        <SafeAreaView style={styles.container} edges={['top']}>
+            {/* Compact Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={handleRetake} style={styles.backButton}>
-                    <Ionicons name="close" size={28} color={colors.lightGray} />
+                    <Ionicons name="close" size={24} color={colors.lightGray} />
                 </TouchableOpacity>
                 <View style={styles.headerCenter}>
                     <Text style={styles.headerTitle}>Select an Object</Text>
-                    <Text style={styles.headerSubtitle}>Tap any object to learn about it</Text>
+                    <Text style={styles.headerSubtitle}>Tap any box, then confirm below</Text>
                 </View>
                 <View style={styles.placeholder} />
             </View>
@@ -126,12 +130,19 @@ export default function ObjectSelectionScreen() {
                                     borderWidth: isSelected ? 4 : 3,
                                 }
                             ]}
-                            onPress={() => !isAnalyzing && handleObjectSelect(object)}
+                            onPress={() => !isAnalyzing && handleBoxTap(object)}
                             disabled={isAnalyzing}
-                            activeOpacity={0.8}
+                            activeOpacity={0.7}
                         >
-                            {/* Label */}
-                            <View style={[styles.label, { backgroundColor: boxColor }]}>
+                            {/* Label - positioned intelligently to avoid header overlap */}
+                            <View
+                                style={[
+                                    styles.label,
+                                    { backgroundColor: boxColor },
+                                    // If box is near top, put label inside/below
+                                    boxTop < 40 ? { top: 2, bottom: 'auto' } : { top: -26 }
+                                ]}
+                            >
                                 <Text style={styles.labelText} numberOfLines={1}>
                                     {object.name}
                                 </Text>
@@ -147,12 +158,19 @@ export default function ObjectSelectionScreen() {
                             <View style={[styles.corner, styles.topRight, { borderColor: boxColor }]} />
                             <View style={[styles.corner, styles.bottomLeft, { borderColor: boxColor }]} />
                             <View style={[styles.corner, styles.bottomRight, { borderColor: boxColor }]} />
+
+                            {/* Selected indicator overlay */}
+                            {isSelected && (
+                                <View style={styles.selectedOverlay}>
+                                    <Ionicons name="checkmark-circle" size={40} color={colors.secondary} />
+                                </View>
+                            )}
                         </TouchableOpacity>
                     );
                 })}
             </View>
 
-            {/* Bottom info panel */}
+            {/* Bottom panel */}
             <View style={styles.bottomPanel}>
                 {isAnalyzing ? (
                     <View style={styles.analyzingContainer}>
@@ -167,27 +185,61 @@ export default function ObjectSelectionScreen() {
                 ) : (
                     <>
                         <View style={styles.infoCard}>
-                            <Ionicons name="information-circle-outline" size={24} color={colors.primary} />
+                            <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
                             <Text style={styles.infoText}>
-                                Found {detectedObjects.length} {detectedObjects.length === 1 ? 'object' : 'objects'}. Tap any box to explore!
+                                Found {detectedObjects.length} {detectedObjects.length === 1 ? 'object' : 'objects'}.
+                                {selectedObject ? ' Tap the button below to continue!' : ' Tap any box to select.'}
                             </Text>
                         </View>
 
-                        {/* Object list */}
-                        <View style={styles.objectList}>
-                            {detectedObjects.map((object, index) => (
-                                <TouchableOpacity
-                                    key={index}
-                                    style={styles.objectChip}
-                                    onPress={() => handleObjectSelect(object)}
-                                >
-                                    <Ionicons name="cube-outline" size={16} color={colors.primary} />
-                                    <Text style={styles.chipText} numberOfLines={1}>
-                                        {object.name}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+                        {/* Object list with full names */}
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            style={styles.objectListScroll}
+                            contentContainerStyle={styles.objectList}
+                        >
+                            {detectedObjects.map((object, index) => {
+                                const isSelected = selectedObject?.name === object.name;
+                                return (
+                                    <TouchableOpacity
+                                        key={index}
+                                        style={[
+                                            styles.objectChip,
+                                            isSelected && styles.objectChipSelected
+                                        ]}
+                                        onPress={() => handleBoxTap(object)}
+                                    >
+                                        <Ionicons
+                                            name={isSelected ? "checkmark-circle" : "cube-outline"}
+                                            size={18}
+                                            color={isSelected ? colors.secondary : colors.primary}
+                                        />
+                                        <Text
+                                            style={[
+                                                styles.chipText,
+                                                isSelected && styles.chipTextSelected
+                                            ]}
+                                        >
+                                            {object.name}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+
+                        {/* Confirm button - only show when object is selected */}
+                        {selectedObject && (
+                            <TouchableOpacity
+                                style={styles.confirmButton}
+                                onPress={handleObjectConfirm}
+                            >
+                                <Ionicons name="arrow-forward-circle" size={24} color={colors.background} />
+                                <Text style={styles.confirmButtonText}>
+                                    Learn About "{selectedObject.name}"
+                                </Text>
+                            </TouchableOpacity>
+                        )}
                     </>
                 )}
             </View>
@@ -204,15 +256,15 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 15,
-        paddingVertical: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 5,
         borderBottomWidth: 1,
         borderBottomColor: 'rgba(0, 191, 255, 0.2)',
     },
     backButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         backgroundColor: '#1A1C2A',
         justifyContent: 'center',
         alignItems: 'center',
@@ -220,21 +272,21 @@ const styles = StyleSheet.create({
     headerCenter: {
         flex: 1,
         alignItems: 'center',
-        paddingHorizontal: 10,
+        paddingHorizontal: 8,
     },
     headerTitle: {
         fontFamily: fonts.heading,
         color: colors.text,
-        fontSize: 18,
+        fontSize: 16,
     },
     headerSubtitle: {
         fontFamily: fonts.body,
         color: colors.lightGray,
-        fontSize: 12,
+        fontSize: 11,
         marginTop: 2,
     },
     placeholder: {
-        width: 40,
+        width: 36,
     },
     imageSection: {
         flex: 1,
@@ -252,33 +304,32 @@ const styles = StyleSheet.create({
     },
     label: {
         position: 'absolute',
-        top: -28,
         left: 0,
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 6,
-        maxWidth: 150,
+        maxWidth: 180,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.8,
+        shadowOpacity: 0.9,
         shadowRadius: 4,
         elevation: 5,
     },
     labelText: {
         fontFamily: fonts.heading,
-        fontSize: 12,
+        fontSize: 11,
         color: colors.background,
     },
     confidenceBadge: {
         position: 'absolute',
-        bottom: -24,
+        bottom: -22,
         right: 0,
         paddingHorizontal: 6,
         paddingVertical: 3,
         borderRadius: 6,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.8,
+        shadowOpacity: 0.9,
         shadowRadius: 4,
         elevation: 5,
     },
@@ -321,53 +372,67 @@ const styles = StyleSheet.create({
         borderTopWidth: 0,
         borderBottomRightRadius: 8,
     },
+    selectedOverlay: {
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: [{ translateX: -20 }, { translateY: -20 }],
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        borderRadius: 20,
+        padding: 2,
+    },
     bottomPanel: {
         backgroundColor: colors.background,
         borderTopWidth: 1,
         borderTopColor: 'rgba(0, 191, 255, 0.2)',
-        paddingHorizontal: 20,
-        paddingVertical: 20,
-        paddingBottom: 10,
+        paddingHorizontal: 16,
+        paddingTop: 12,
+        paddingBottom: 12,
+        maxHeight: 220,
     },
     analyzingContainer: {
         alignItems: 'center',
-        gap: 12,
-        paddingVertical: 20,
+        gap: 10,
+        paddingVertical: 16,
     },
     analyzingText: {
         fontFamily: fonts.heading,
-        fontSize: 18,
+        fontSize: 16,
         color: colors.primary,
         textAlign: 'center',
     },
     analyzingSubtext: {
         fontFamily: fonts.body,
-        fontSize: 14,
+        fontSize: 13,
         color: colors.lightGray,
         textAlign: 'center',
     },
     infoCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        gap: 10,
         backgroundColor: 'rgba(0, 191, 255, 0.1)',
-        padding: 15,
-        borderRadius: 12,
+        padding: 12,
+        borderRadius: 10,
         borderWidth: 1,
         borderColor: 'rgba(0, 191, 255, 0.3)',
-        marginBottom: 15,
+        marginBottom: 12,
     },
     infoText: {
         flex: 1,
         fontFamily: fonts.body,
-        fontSize: 14,
+        fontSize: 12,
         color: colors.lightGray,
-        lineHeight: 20,
+        lineHeight: 18,
+    },
+    objectListScroll: {
+        maxHeight: 45,
+        marginBottom: 12,
     },
     objectList: {
         flexDirection: 'row',
-        flexWrap: 'wrap',
         gap: 8,
+        paddingRight: 16,
     },
     objectChip: {
         flexDirection: 'row',
@@ -379,11 +444,40 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         borderWidth: 1,
         borderColor: 'rgba(0, 191, 255, 0.3)',
-        maxWidth: width * 0.4,
+    },
+    objectChipSelected: {
+        backgroundColor: 'rgba(138, 43, 226, 0.2)',
+        borderColor: colors.secondary,
+        borderWidth: 2,
     },
     chipText: {
         fontFamily: fonts.heading,
         fontSize: 12,
         color: colors.primary,
+    },
+    chipTextSelected: {
+        color: colors.secondary,
+    },
+    confirmButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        backgroundColor: colors.secondary,
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        borderRadius: 25,
+        shadowColor: colors.secondary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    confirmButtonText: {
+        fontFamily: fonts.heading,
+        fontSize: 14,
+        color: colors.background,
+        flex: 1,
+        textAlign: 'center',
     },
 });
