@@ -1,21 +1,7 @@
 // In app/context/types.ts
+import { DetectedObject, SceneContext } from '../navigation/types';
 
 export type GradeLevel = 'elementary' | 'juniorHigh' | 'seniorHigh';
-
-export type Discovery = {
-    id: string;
-    objectName: string;
-    confidence: number;
-    category: string;
-    imageUri: string;
-    funFact: string;
-    the_science_in_action: string;
-    why_it_matters_to_you: string;
-    tryThis: string;
-    explore_further: string;
-    timestamp: number;
-    dateSaved: string;
-};
 
 export type UserData = {
     isGuest: boolean;
@@ -30,6 +16,40 @@ export type AppSettings = {
     language: 'english' | 'filipino';
 };
 
+export type Discovery = {
+    id: string;
+    objectName: string;
+    confidence: number;
+    category: string;
+    imageUri: string;
+    funFact: string;
+    the_science_in_action: string;
+    why_it_matters_to_you: string;
+    tryThis: string;
+    explore_further: string;
+    timestamp: number;
+    dateSaved: string;
+
+    sessionId?: string;
+    fullImageUri?: string;
+    boundingBox?: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+    };
+};
+
+export type DiscoverySessionState = {
+    sessionId: string;             // Unique session ID
+    fullImageUri: string;          // Original photo path
+    detectedObjects: DetectedObject[]; // All detected objects
+    exploredObjectIds: string[];   // Which objects user learned about
+    context?: SceneContext;        // Scene context from AI
+    createdAt: number;             // Timestamp (ms)
+    expiresAt: number;             // Auto-cleanup after 24 hours
+};
+
 export type AppContextType = {
     // User
     user: UserData;
@@ -40,6 +60,13 @@ export type AppContextType = {
     addDiscovery: (discovery: Omit<Discovery, 'id' | 'timestamp' | 'dateSaved'>) => Promise<void>;
     removeDiscovery: (id: string) => Promise<void>;
     getDiscoveryById: (id: string) => Discovery | undefined;
+
+    // Discovery Sessions
+    currentSession: DiscoverySessionState | null;
+    createSession: (imageUri: string, objects: DetectedObject[], context?: SceneContext) => string;
+    getSession: (sessionId: string) => DiscoverySessionState | null;
+    markObjectAsExplored: (sessionId: string, objectId: string) => void;
+    clearExpiredSessions: () => void;
 
     // Settings
     settings: AppSettings;

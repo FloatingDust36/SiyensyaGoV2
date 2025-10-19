@@ -20,6 +20,33 @@ export type AnalysisResult = {
     explore_further: string;
 };
 
+export type DetectedObject = {
+    id: string;
+    name: string;
+    confidence: number;
+    boundingBox: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+    };
+};
+
+export type SceneContext = {
+    location: 'workspace' | 'kitchen' | 'classroom' | 'garden' | 'living_room' | 'laboratory' | 'outdoor' | 'other';
+    description: string;           // Brief scene description
+    suggestedLearningPath: string[]; // Recommended object order
+    relatedConcepts: string[];     // STEM concepts in scene
+    culturalContext?: string;      // Filipino-specific context (optional)
+};
+
+export type ObjectDetectionResult = {
+    objects: DetectedObject[];     // ENHANCED: Now includes IDs
+    imageWidth: number;            // EXISTING
+    imageHeight: number;           // EXISTING
+    context?: SceneContext;        // NEW: Scene analysis (optional)
+};
+
 // Defines all screens available in the app's root stack navigator
 export type RootStackParamList = {
     Launch: undefined;
@@ -31,27 +58,9 @@ export type RootStackParamList = {
         imageUri: string;
         detectedObjects: DetectedObject[];
     };
-
     LearningContent: {
         imageUri: string;
         result: AnalysisResult;
-        discoveryId?: string; // Optional: if viewing from Museum
+        discoveryId?: string;
     };
-};
-
-export type DetectedObject = {
-    name: string;
-    confidence: number;
-    boundingBox: {
-        x: number;      // Percentage (0-100)
-        y: number;      // Percentage (0-100)
-        width: number;  // Percentage (0-100)
-        height: number; // Percentage (0-100)
-    };
-};
-
-export type ObjectDetectionResult = {
-    objects: DetectedObject[];
-    imageWidth: number;
-    imageHeight: number;
 };
