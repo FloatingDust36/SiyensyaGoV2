@@ -1,4 +1,5 @@
-// In app/screens/ObjectRecognitionScreen.tsx
+// app/screens/ObjectRecognitionScreen.tsx
+
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, Image, ActivityIndicator, TouchableOpacity, Animated } from 'react-native';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
@@ -9,6 +10,7 @@ import { colors, fonts } from '../theme/theme';
 import { detectObjectsInImage } from '../services/gemini';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { sessionManager } from '../utils/sessionManager';
 
 type ObjectRecognitionScreenRouteProp = RouteProp<RootStackParamList, 'ObjectRecognition'>;
 type NavigationProp = StackNavigationProp<RootStackParamList>;
@@ -21,11 +23,10 @@ export default function ObjectRecognitionScreen() {
     const [isDetecting, setIsDetecting] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const scanProgress = useRef(new Animated.Value(0)).current;
+    // Animation refs
+    const scanLineAnim = useRef(new Animated.Value(0)).current;
     const pulseAnim = useRef(new Animated.Value(1)).current;
     const rotateAnim = useRef(new Animated.Value(0)).current;
-
-    // Particle animations
     const particleAnims = useRef(
         Array.from({ length: 6 }, () => ({
             x: new Animated.Value(0),
@@ -35,96 +36,95 @@ export default function ObjectRecognitionScreen() {
         }))
     ).current;
 
+    // Start animations
     useEffect(() => {
-        // Start animations
-        if (isDetecting) {
-            // Progress bar
-            Animated.loop(
-                Animated.sequence([
-                    Animated.timing(scanProgress, {
-                        toValue: 1,
-                        duration: 2000,
-                        useNativeDriver: false,
-                    }),
-                    Animated.timing(scanProgress, {
-                        toValue: 0,
-                        duration: 0,
-                        useNativeDriver: false,
-                    }),
-                ])
-            ).start();
-
-            // Pulse
-            Animated.loop(
-                Animated.sequence([
-                    Animated.timing(pulseAnim, {
-                        toValue: 1.15,
-                        duration: 1000,
-                        useNativeDriver: true,
-                    }),
-                    Animated.timing(pulseAnim, {
-                        toValue: 1,
-                        duration: 1000,
-                        useNativeDriver: true,
-                    }),
-                ])
-            ).start();
-
-            // Rotation
-            Animated.loop(
-                Animated.timing(rotateAnim, {
+        // Progress bar
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(scanLineAnim, {
                     toValue: 1,
-                    duration: 3000,
+                    duration: 2000,
+                    useNativeDriver: false,
+                }),
+                Animated.timing(scanLineAnim, {
+                    toValue: 0,
+                    duration: 0,
+                    useNativeDriver: false,
+                }),
+            ])
+        ).start();
+
+        // Pulse animation
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulseAnim, {
+                    toValue: 1.15,
+                    duration: 1000,
                     useNativeDriver: true,
-                })
+                }),
+                Animated.timing(pulseAnim, {
+                    toValue: 1,
+                    duration: 1000,
+                    useNativeDriver: true,
+                }),
+            ])
+        ).start();
+
+        // Rotation
+        Animated.loop(
+            Animated.timing(rotateAnim, {
+                toValue: 1,
+                duration: 3000,
+                useNativeDriver: true,
+            })
+        ).start();
+
+        // Particle animations
+        particleAnims.forEach((particle, index) => {
+            const angle = (index / particleAnims.length) * Math.PI * 2;
+            const distance = 60;
+
+            Animated.loop(
+                Animated.sequence([
+                    Animated.parallel([
+                        Animated.timing(particle.x, {
+                            toValue: Math.cos(angle) * distance,
+                            duration: 1500,
+                            useNativeDriver: true,
+                        }),
+                        Animated.timing(particle.y, {
+                            toValue: Math.sin(angle) * distance,
+                            duration: 1500,
+                            useNativeDriver: true,
+                        }),
+                        Animated.timing(particle.opacity, {
+                            toValue: 0.8,
+                            duration: 750,
+                            useNativeDriver: true,
+                        }),
+                        Animated.timing(particle.scale, {
+                            toValue: 1,
+                            duration: 750,
+                            useNativeDriver: true,
+                        }),
+                    ]),
+                    Animated.parallel([
+                        Animated.timing(particle.opacity, {
+                            toValue: 0,
+                            duration: 750,
+                            useNativeDriver: true,
+                        }),
+                        Animated.timing(particle.scale, {
+                            toValue: 0,
+                            duration: 750,
+                            useNativeDriver: true,
+                        }),
+                    ]),
+                ])
             ).start();
+        });
 
-            // Particles
-            particleAnims.forEach((particle, index) => {
-                const angle = (index / particleAnims.length) * Math.PI * 2;
-                const distance = 60;
-
-                Animated.loop(
-                    Animated.sequence([
-                        Animated.parallel([
-                            Animated.timing(particle.x, {
-                                toValue: Math.cos(angle) * distance,
-                                duration: 1500,
-                                useNativeDriver: true,
-                            }),
-                            Animated.timing(particle.y, {
-                                toValue: Math.sin(angle) * distance,
-                                duration: 1500,
-                                useNativeDriver: true,
-                            }),
-                            Animated.timing(particle.opacity, {
-                                toValue: 0.8,
-                                duration: 750,
-                                useNativeDriver: true,
-                            }),
-                            Animated.timing(particle.scale, {
-                                toValue: 1,
-                                duration: 750,
-                                useNativeDriver: true,
-                            }),
-                        ]),
-                        Animated.parallel([
-                            Animated.timing(particle.opacity, {
-                                toValue: 0,
-                                duration: 750,
-                                useNativeDriver: true,
-                            }),
-                            Animated.timing(particle.scale, {
-                                toValue: 0,
-                                duration: 750,
-                                useNativeDriver: true,
-                            }),
-                        ]),
-                    ])
-                ).start();
-            });
-        }
-
+        // Detection with Session Creation
         const performDetection = async () => {
             if (!imageUri) return;
 
@@ -138,14 +138,41 @@ export default function ObjectRecognitionScreen() {
             if ('error' in detectionResult) {
                 setError(detectionResult.error);
             } else if (detectionResult.objects && detectionResult.objects.length > 0) {
-                // Success haptic
-                await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                // Create Session with detected objects and scene context
+                try {
+                    const sessionId = await sessionManager.createSession(
+                        imageUri,
+                        detectionResult.objects,
+                        detectionResult.sceneContext // Optional scene context
+                    );
 
-                // Navigate to object selection
-                navigation.replace('ObjectSelection', {
-                    imageUri,
-                    detectedObjects: detectionResult.objects
-                });
+                    console.log(`✓ Created session ${sessionId} with ${detectionResult.objects.length} objects`);
+
+                    // Log scene context if available
+                    if (detectionResult.sceneContext) {
+                        console.log(`📍 Scene: ${detectionResult.sceneContext.location}`);
+                    }
+
+                    // Success haptic
+                    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+                    // NAVIGATE TO OBJECTSELECTION WITH SESSION DATA=
+                    navigation.replace('ObjectSelection', {
+                        imageUri,
+                        detectedObjects: detectionResult.objects,
+                        // Note: We're still using ObjectSelection for now
+                        // In Step 8, we'll create DiscoverySession screen
+                    });
+
+                } catch (sessionError) {
+                    console.error('Error creating session:', sessionError);
+                    // Even if session creation fails, still navigate
+                    // (fallback to sessionless mode)
+                    navigation.replace('ObjectSelection', {
+                        imageUri,
+                        detectedObjects: detectionResult.objects,
+                    });
+                }
             } else {
                 setError('No objects detected in the image. Please try again with a clearer photo.');
             }
@@ -155,7 +182,7 @@ export default function ObjectRecognitionScreen() {
         performDetection();
     }, [imageUri]);
 
-    const progressWidth = scanProgress.interpolate({
+    const progressWidth = scanLineAnim.interpolate({
         inputRange: [0, 1],
         outputRange: ['0%', '100%'],
     });
@@ -238,7 +265,7 @@ export default function ObjectRecognitionScreen() {
                     </View>
 
                     <Text style={styles.statusText}>Detecting Objects...</Text>
-                    <Text style={styles.subStatusText}>Identifying items in your photo</Text>
+                    <Text style={styles.subStatusText}>Analyzing your photo with AI</Text>
 
                     <View style={styles.progressBarContainer}>
                         <Animated.View style={[styles.progressBar, { width: progressWidth }]} />

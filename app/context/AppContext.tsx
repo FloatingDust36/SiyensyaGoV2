@@ -1,7 +1,8 @@
 // app/context/AppContext.tsx
+
 import NetInfo from '@react-native-community/netinfo';
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
-import { AppContextType, Discovery, UserData, AppSettings, GradeLevel } from './types';
+import { AppContextType, Discovery, UserData, AppSettings, GradeLevel, DiscoverySessionState } from './types';
 import { StorageService } from '../services/storage';
 import { deleteImage } from '../services/imageStorage';
 import {
@@ -12,8 +13,9 @@ import {
     SupabaseStorage,
     SupabaseSettings
 } from '../services/supabase';
+import { sessionManager } from '../utils/sessionManager';
+import { DetectedObject, SceneContext } from '../navigation/types';
 
-// Default values
 const DEFAULT_USER: UserData = {
     isGuest: true,
     userName: 'Guest Explorer',
@@ -40,6 +42,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [authUser, setAuthUser] = useState<any>(null);
     const [isSyncing, setIsSyncing] = useState(false);
     const [syncStatus, setSyncStatus] = useState<string>('');
+    const [currentSession, setCurrentSession] = useState<DiscoverySessionState | null>(null);
 
     // Load data on mount
     useEffect(() => {
@@ -47,11 +50,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const authCleanup = setupAuthListener();
         const networkCleanup = setupNetworkListener();
 
+        // Initialize session manager and cleanup expired sessions
+        initializeSessionManager();
+
         return () => {
             authCleanup();
             networkCleanup();
         };
     }, []);
+
+    // Initialize Session Manager
+    const initializeSessionManager = async () => {
+        try {
+            // Initialize session manager (loads from AsyncStorage)
+            await sessionManager.initialize();
+
+            // Cleanup expired sessions
+            const cleanedCount = await sessionManager.cleanupExpiredSessions();
+            if (cleanedCount > 0) {
+                console.log(`🧹 Cleaned up ${cleanedCount} expired sessions on startup`);
+            }
+        } catch (error) {
+            console.error('Error initializing session manager:', error);
+        }
+    };
 
     // Setup Supabase auth listener
     const setupAuthListener = () => {
@@ -92,10 +114,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Handle user sign in
     const handleUserSignIn = async (supabaseUser: any) => {
         try {
-            // Get profile from Supabase
             const profile = await SupabaseProfile.getProfile(supabaseUser.id);
 
-            // Update local user state
             const userData: UserData = {
                 isGuest: false,
                 userName: profile.user_name,
@@ -105,10 +125,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setUser(userData);
             await StorageService.saveUser(userData);
 
-            // Sync discoveries from cloud
             await syncFromCloud(supabaseUser.id);
-
-            // Sync settings from cloud
             await syncSettingsFromCloud(supabaseUser.id);
         } catch (error) {
             console.error('Error handling sign in:', error);
@@ -121,7 +138,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await StorageService.saveUser(DEFAULT_USER);
     };
 
-    // Sync discoveries from Supabase to local
+    // Sync discoveries from cloud
     const syncFromCloud = async (userId: string) => {
         if (!userId) return;
 
@@ -129,7 +146,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         try {
             const cloudDiscoveries = await SupabaseDiscoveries.getDiscoveries(userId);
 
-            // Convert Supabase format to local format
             const localDiscoveries: Discovery[] = cloudDiscoveries.map((d: any) => ({
                 id: d.id,
                 objectName: d.object_name,
@@ -160,7 +176,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             console.error('Sync from cloud error:', error);
             setSyncStatus('Sync failed');
             setTimeout(() => setSyncStatus(''), 3000);
-            // Fall back to local storage
             const localDiscoveries = await StorageService.getDiscoveries();
             setDiscoveries(localDiscoveries);
         } finally {
@@ -168,7 +183,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    // Sync settings from Supabase
+    // Sync settings from cloud
     const syncSettingsFromCloud = async (userId: string) => {
         try {
             const cloudSettings = await SupabaseSettings.getSettings(userId);
@@ -184,20 +199,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     };
 
+    // Load initial data
     const loadInitialData = async () => {
         try {
             setIsLoading(true);
 
-            // Check for existing Supabase session
             const session = await SupabaseAuth.getSession();
 
             if (session) {
-                // User is already logged in
                 setAuthUser(session.user);
                 await handleUserSignIn(session.user);
                 setIsFirstLaunch(false);
             } else {
-                // Load from local storage (guest mode)
                 const savedUser = await StorageService.getUser();
                 if (savedUser) {
                     setUser(savedUser);
@@ -226,7 +239,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setUser(updatedUser);
             await StorageService.saveUser(updatedUser);
 
-            // Sync to cloud if logged in
             if (authUser && !updatedUser.isGuest) {
                 await SupabaseProfile.updateProfile(authUser.id, {
                     user_name: updatedUser.userName,
@@ -253,20 +265,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 }),
             };
 
-            // Save locally first
             await StorageService.addDiscovery(newDiscovery);
             setDiscoveries(prev => [newDiscovery, ...prev]);
 
-            // Sync to cloud if logged in
             if (authUser && !user.isGuest) {
                 try {
-                    // Upload image to Supabase Storage
                     const imagePath = await SupabaseStorage.uploadImage(
                         discoveryData.imageUri,
                         authUser.id
                     );
 
-                    // Save to Supabase database
                     await SupabaseDiscoveries.addDiscovery(authUser.id, {
                         object_name: newDiscovery.objectName,
                         confidence: newDiscovery.confidence,
@@ -295,20 +303,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         try {
             const discovery = discoveries.find(d => d.id === id);
 
-            // Remove from local storage
             await StorageService.removeDiscovery(id);
             setDiscoveries(prev => prev.filter(d => d.id !== id));
 
             if (!discovery) return;
 
-            // Determine if image is local or cloud
             const isCloudImage = discovery.imageUri.startsWith('http');
 
             if (isCloudImage) {
-                // Cloud image - delete from Supabase Storage
                 if (authUser && !user.isGuest) {
                     try {
-                        // Extract image path from URL
                         const urlParts = discovery.imageUri.split('/discovery-images/');
                         if (urlParts[1]) {
                             const imagePath = urlParts[1];
@@ -320,12 +324,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
                     }
                 }
             } else {
-                // Local image - delete from device storage
                 await deleteImage(discovery.imageUri);
                 console.log('✓ Local image deleted');
             }
 
-            // Remove from cloud database if logged in
             if (authUser && !user.isGuest) {
                 try {
                     await SupabaseDiscoveries.deleteDiscovery(id);
@@ -352,7 +354,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setSettings(updatedSettings);
             await StorageService.saveSettings(updatedSettings);
 
-            // Sync to cloud if logged in
             if (authUser && !user.isGuest) {
                 await SupabaseSettings.updateSettings(authUser.id, {
                     notifications_enabled: updatedSettings.notificationsEnabled,
@@ -380,7 +381,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         return {
             totalDiscoveries: discoveries.length,
-            streak: 0, // TODO: Calculate actual streak
+            streak: 0,
             subjectDistribution,
             favoriteSubject,
         };
@@ -389,7 +390,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Clear All Data
     const clearAllData = async () => {
         try {
-            // Delete all local images
             for (const discovery of discoveries) {
                 if (discovery.imageUri) {
                     await deleteImage(discovery.imageUri);
@@ -410,20 +410,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const signOut = async () => {
         try {
             if (!user.isGuest && authUser) {
-                // Sign out from Supabase
                 await SupabaseAuth.signOut();
             }
 
-            // Reset to guest
             const guestUser: UserData = {
                 isGuest: true,
                 userName: 'Guest Explorer',
-                gradeLevel: user.gradeLevel, // Keep grade level
+                gradeLevel: user.gradeLevel,
             };
             setUser(guestUser);
             await StorageService.saveUser(guestUser);
 
-            // Clear discoveries for privacy
             setDiscoveries([]);
             await StorageService.saveDiscoveries([]);
         } catch (error) {
@@ -432,18 +429,86 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     };
 
+    // Create Session - Start new discovery session
+    const createSession = (
+        imageUri: string,
+        objects: DetectedObject[],
+        context?: SceneContext
+    ): string => {
+        // Synchronous wrapper for async session creation
+        sessionManager.createSession(imageUri, objects, context).then(sessionId => {
+            // Update current session state
+            sessionManager.getSession(sessionId).then(session => {
+                if (session) {
+                    setCurrentSession(session);
+                }
+            });
+        });
+
+        // Return temporary ID immediately (async operation continues in background)
+        return `session_${Date.now()}`;
+    };
+
+    // Get Session - Retrieve session by ID
+    const getSession = (sessionId: string): DiscoverySessionState | null => {
+        // This will be called synchronously, but we need to handle async
+        // For now, return null and trigger async fetch
+        sessionManager.getSession(sessionId).then(session => {
+            if (session) {
+                setCurrentSession(session);
+            }
+        });
+        return currentSession;
+    };
+
+    // Mark Object as Explored
+    const markObjectAsExplored = (sessionId: string, objectId: string): void => {
+        sessionManager.markObjectAsExplored(sessionId, objectId).then(() => {
+            // Refresh current session
+            sessionManager.getSession(sessionId).then(session => {
+                if (session) {
+                    setCurrentSession(session);
+                }
+            });
+        });
+    };
+
+    // Clear Expired Sessions
+    const clearExpiredSessions = (): void => {
+        sessionManager.cleanupExpiredSessions();
+    };
+
+    // CONTEXT VALUE
     const contextValue: AppContextType = {
+        // User
         user,
         updateUser,
+
+        // Discoveries
         discoveries,
         addDiscovery,
         removeDiscovery,
         getDiscoveryById,
+
+        // Sessions (NEW)
+        currentSession,
+        createSession,
+        getSession,
+        markObjectAsExplored,
+        clearExpiredSessions,
+
+        // Settings
         settings,
         updateSettings,
+
+        // Stats
         stats,
+
+        // Actions
         clearAllData,
         signOut,
+
+        // State
         isLoading: isLoading || isSyncing,
         isFirstLaunch,
         isOnline,
