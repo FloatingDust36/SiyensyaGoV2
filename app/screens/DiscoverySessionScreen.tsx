@@ -35,6 +35,35 @@ export default function DiscoverySessionScreen() {
 
     const { imageUri, detectedObjects } = route.params;
 
+    const [sessionId, setSessionId] = useState<string | undefined>(undefined);
+
+    React.useEffect(() => {
+        const loadSession = async () => {
+            // Try to get sessionId from route params first
+            const paramSessionId = route.params?.sessionId;
+
+            if (paramSessionId) {
+                // Session ID provided directly
+                setSessionId(paramSessionId);
+                const session = await sessionManager.getSession(paramSessionId);
+                if (session?.context) {
+                    setSceneContext(session.context);
+                }
+            } else {
+                // Fallback: Find session by matching image URI
+                const sessions = await sessionManager.getAllSessions();
+                const matchingSession = sessions.find(s => s.fullImageUri === imageUri);
+                if (matchingSession) {
+                    setSessionId(matchingSession.sessionId);
+                    if (matchingSession.context) {
+                        setSceneContext(matchingSession.context);
+                    }
+                }
+            }
+        };
+        loadSession();
+    }, [imageUri, route.params?.sessionId]);
+
     // Get session from sessionManager (we'll need sessionId later)
     const [sceneContext, setSceneContext] = useState<any>(null);
 
@@ -105,6 +134,8 @@ export default function DiscoverySessionScreen() {
 
             // Navigate to learning content
             navigation.navigate('LearningContent', {
+                sessionId,
+                objectId: object.id,
                 imageUri,
                 boundingBox: object.boundingBox,
                 result: {

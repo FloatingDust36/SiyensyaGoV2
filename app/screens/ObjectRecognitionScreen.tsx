@@ -158,10 +158,9 @@ export default function ObjectRecognitionScreen() {
 
                     // NAVIGATE TO OBJECTSELECTION WITH SESSION DATA=
                     navigation.replace('ObjectSelection', {
+                        sessionId,
                         imageUri,
                         detectedObjects: detectionResult.objects,
-                        // Note: We're still using ObjectSelection for now
-                        // In Step 8, we'll create DiscoverySession screen
                     });
 
                 } catch (sessionError) {

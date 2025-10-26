@@ -55,12 +55,21 @@ export type RootStackParamList = {
     MainTabs: NavigatorScreenParams<TabParamList>;
     ObjectRecognition: { imageUri: string };
     ObjectSelection: {
+        sessionId?: string
         imageUri: string;
         detectedObjects: DetectedObject[];
     };
     LearningContent: {
+        sessionId?: string;
+        objectId?: string;
         imageUri: string;
         result: AnalysisResult;
         discoveryId?: string;
+        boundingBox?: {        // NEW: Added for cropping support
+            x: number;
+            y: number;
+            width: number;
+            height: number;
+        };
     };
 };

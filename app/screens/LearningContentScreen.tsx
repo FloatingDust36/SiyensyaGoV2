@@ -1,6 +1,6 @@
-// In app/screens/LearningContentScreen.tsx
+// app/screens/LearningContentScreen.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Animated, Dimensions, Alert } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Animated, Dimensions, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -10,6 +10,8 @@ import { colors, fonts } from '../theme/theme';
 import { useApp } from '../context/AppContext';
 import { saveImagePermanently } from '../services/imageStorage';
 import * as Haptics from 'expo-haptics';
+import { cropImageForObject } from '../utils/imageCropper';
+import { sessionManager } from '../utils/sessionManager';
 
 type LearningContentRouteProp = RouteProp<RootStackParamList, 'LearningContent'>;
 type NavigationProp = StackNavigationProp<RootStackParamList>;
@@ -28,7 +30,16 @@ export default function LearningContentScreen() {
     const route = useRoute<LearningContentRouteProp>();
     const navigation = useNavigation<NavigationProp>();
 
-    const { addDiscovery, removeDiscovery, getDiscoveryById } = useApp();
+    // Session states
+    const [sessionId, setSessionId] = useState<string | null>(null);
+    const [hasMoreObjects, setHasMoreObjects] = useState(false);
+    const [remainingCount, setRemainingCount] = useState(0);
+
+    // Image cropping states
+    const [croppedImageUri, setCroppedImageUri] = useState<string | null>(null);
+    const [isLoadingCrop, setIsLoadingCrop] = useState(false);
+
+    const { addDiscovery, removeDiscovery } = useApp();
     const [isSaved, setIsSaved] = useState(false);
     const [isFromMuseum, setIsFromMuseum] = useState(false);
 
@@ -49,8 +60,8 @@ export default function LearningContentScreen() {
     const slideAnim = useRef(new Animated.Value(0)).current;
     const scrollViewRef = useRef<ScrollView>(null);
 
+    // Check if from Museum
     useEffect(() => {
-        // Check if this is from Museum (has discoveryId)
         const discoveryId = route.params?.discoveryId;
         if (discoveryId) {
             setIsFromMuseum(true);
@@ -58,8 +69,55 @@ export default function LearningContentScreen() {
         }
     }, [route.params]);
 
+    // Crop image if boundingBox is provided
+    useEffect(() => {
+        const cropImage = async () => {
+            const boundingBox = route.params?.boundingBox;
+            if (boundingBox && imageUri && result.objectName) {
+                setIsLoadingCrop(true);
+                try {
+                    const cropped = await cropImageForObject(
+                        imageUri,
+                        boundingBox,
+                        result.objectName
+                    );
+                    setCroppedImageUri(cropped);
+                    console.log('✓ Image cropped for display');
+                } catch (error) {
+                    console.error('Error cropping image:', error);
+                    setCroppedImageUri(imageUri);
+                } finally {
+                    setIsLoadingCrop(false);
+                }
+            } else {
+                setCroppedImageUri(imageUri);
+            }
+        };
+
+        cropImage();
+    }, [imageUri, route.params?.boundingBox, result.objectName]);
+
+    // Check if there are more objects to explore in this session
+    useEffect(() => {
+        const checkSession = async () => {
+            const sid = route.params?.sessionId;
+            if (sid) {
+                setSessionId(sid);
+
+                const hasMore = await sessionManager.hasUnexploredObjects(sid);
+                setHasMoreObjects(hasMore);
+
+                if (hasMore) {
+                    const unexplored = await sessionManager.getUnexploredObjects(sid);
+                    setRemainingCount(unexplored.length);
+                }
+            }
+        };
+
+        checkSession();
+    }, [route.params?.sessionId]);
+
     const changeSection = (newIndex: number) => {
-        // Slide and fade animation
         Animated.parallel([
             Animated.timing(fadeAnim, {
                 toValue: 0,
@@ -95,9 +153,21 @@ export default function LearningContentScreen() {
     const handleDotPress = (index: number) => changeSection(index);
 
     const handleScanAnother = () => navigation.navigate('MainTabs', { screen: 'Camera' });
+
+    const handleExploreMore = async () => {
+        if (sessionId) {
+            const session = await sessionManager.getSession(sessionId);
+            if (session) {
+                navigation.navigate('ObjectSelection', {
+                    imageUri: session.fullImageUri,
+                    detectedObjects: session.detectedObjects,
+                });
+            }
+        }
+    };
+
     const handleAddToMuseum = async () => {
         if (isFromMuseum) {
-            // Delete from museum
             Alert.alert(
                 'Delete Discovery',
                 `Remove "${result.objectName}" from your Museum?`,
@@ -130,14 +200,16 @@ export default function LearningContentScreen() {
         }
 
         try {
-            // Save image permanently before adding discovery
             const permanentImageUri = await saveImagePermanently(imageUri);
 
             await addDiscovery({
                 objectName: result.objectName,
                 confidence: result.confidence,
                 category: (result.category || 'General').toLowerCase(),
-                imageUri: permanentImageUri, // Use permanent URI
+                imageUri: croppedImageUri || permanentImageUri,
+                fullImageUri: imageUri,
+                boundingBox: route.params?.boundingBox,
+                sessionId: sessionId || undefined,
                 funFact: result.funFact,
                 the_science_in_action: result.the_science_in_action,
                 why_it_matters_to_you: result.why_it_matters_to_you,
@@ -145,18 +217,49 @@ export default function LearningContentScreen() {
                 explore_further: result.explore_further,
             });
 
-            // Success haptic
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
             setIsSaved(true);
-            Alert.alert(
-                'Saved!',
-                `"${result.objectName}" has been added to your Museum!`,
-                [
-                    { text: 'View Museum', onPress: () => navigation.navigate('MainTabs', { screen: 'Museum' }) },
-                    { text: 'Continue Learning', style: 'cancel' }
-                ]
-            );
+
+            // Mark object as explored in session
+            if (sessionId) {
+                // We need the object ID - let's add it to route params
+                const objectId = route.params?.objectId;
+                if (objectId) {
+                    await sessionManager.markObjectAsExplored(sessionId, objectId);
+                    console.log(`✓ Marked ${result.objectName} as explored`);
+
+                    // Refresh remaining count
+                    const hasMore = await sessionManager.hasUnexploredObjects(sessionId);
+                    setHasMoreObjects(hasMore);
+
+                    if (hasMore) {
+                        const unexplored = await sessionManager.getUnexploredObjects(sessionId);
+                        setRemainingCount(unexplored.length);
+                    }
+                }
+            }
+
+            // If part of session, show different message
+            if (hasMoreObjects) {
+                Alert.alert(
+                    'Saved!',
+                    `"${result.objectName}" added to Museum!\n\n${remainingCount} more ${remainingCount === 1 ? 'object' : 'objects'} from this photo to explore.`,
+                    [
+                        { text: 'Explore More', onPress: handleExploreMore },
+                        { text: 'View Museum', onPress: () => navigation.navigate('MainTabs', { screen: 'Museum' }) },
+                    ]
+                );
+            } else {
+                Alert.alert(
+                    'Saved!',
+                    `"${result.objectName}" has been added to your Museum!`,
+                    [
+                        { text: 'View Museum', onPress: () => navigation.navigate('MainTabs', { screen: 'Museum' }) },
+                        { text: 'Continue Learning', style: 'cancel' }
+                    ]
+                );
+            }
         } catch (error) {
             Alert.alert('Error', 'Failed to save discovery. Please try again.');
             console.error('Save error:', error);
@@ -179,7 +282,6 @@ export default function LearningContentScreen() {
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
-            {/* Enhanced Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeButton}>
                     <Ionicons name="close" size={28} color={colors.lightGray} />
@@ -203,7 +305,6 @@ export default function LearningContentScreen() {
                 </TouchableOpacity>
             </View>
 
-            {/* Enhanced Progress Bar with Glow */}
             <View style={styles.progressBarContainer}>
                 <Animated.View
                     style={[
@@ -216,16 +317,32 @@ export default function LearningContentScreen() {
                 />
             </View>
 
-            {/* Main Content */}
             <ScrollView
                 ref={scrollViewRef}
                 style={styles.scrollView}
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Compact Image */}
+                {/* Session Info Banner */}
+                {hasMoreObjects && !isFromMuseum && (
+                    <View style={styles.sessionBanner}>
+                        <Ionicons name="information-circle" size={20} color={colors.primary} />
+                        <Text style={styles.sessionBannerText}>
+                            {remainingCount} more {remainingCount === 1 ? 'object' : 'objects'} from this photo waiting to be explored!
+                        </Text>
+                    </View>
+                )}
+
                 <View style={styles.imageContainer}>
-                    <Image source={{ uri: imageUri }} style={styles.image} />
+                    <Image
+                        source={{ uri: croppedImageUri || imageUri }}
+                        style={styles.image}
+                    />
+                    {isLoadingCrop && (
+                        <View style={styles.cropLoadingOverlay}>
+                            <ActivityIndicator size="small" color={colors.primary} />
+                        </View>
+                    )}
                     <View style={styles.imageOverlay}>
                         <View style={[styles.confidenceBadge, { backgroundColor: section.color }]}>
                             <Text style={styles.confidenceText}>{result.confidence}%</Text>
@@ -233,7 +350,6 @@ export default function LearningContentScreen() {
                     </View>
                 </View>
 
-                {/* Animated Content Card */}
                 <Animated.View
                     style={[
                         styles.contentCard,
@@ -243,7 +359,6 @@ export default function LearningContentScreen() {
                         }
                     ]}
                 >
-                    {/* Section Header with Colored Accent */}
                     <View style={styles.sectionHeader}>
                         <View style={[styles.iconContainer, { backgroundColor: `${section.color}20` }]}>
                             <Ionicons name={section.icon as any} size={32} color={section.color} />
@@ -256,10 +371,8 @@ export default function LearningContentScreen() {
                         </View>
                     </View>
 
-                    {/* Content Text with Better Typography */}
                     <Text style={styles.contentText}>{content}</Text>
 
-                    {/* Reading Time Estimate */}
                     <View style={styles.readingInfo}>
                         <Ionicons name="time-outline" size={16} color={colors.lightGray} />
                         <Text style={styles.readingTime}>
@@ -268,7 +381,6 @@ export default function LearningContentScreen() {
                     </View>
                 </Animated.View>
 
-                {/* Interactive Progress Dots */}
                 <View style={styles.dotsContainer}>
                     {SECTIONS.map((sec, index) => (
                         <TouchableOpacity
@@ -293,7 +405,6 @@ export default function LearningContentScreen() {
                     ))}
                 </View>
 
-                {/* Section Preview Cards */}
                 <View style={styles.previewContainer}>
                     <Text style={styles.previewTitle}>Up Next:</Text>
                     {currentSection < SECTIONS.length - 1 && (
@@ -322,27 +433,50 @@ export default function LearningContentScreen() {
                 </View>
             </ScrollView>
 
-            {/* Enhanced Bottom Navigation */}
             <SafeAreaView style={styles.bottomNav} edges={['bottom']}>
                 {currentSection === SECTIONS.length - 1 ? (
                     <View style={styles.finalButtons}>
-                        <TouchableOpacity style={styles.secondaryButton} onPress={handleScanAnother}>
-                            <Ionicons name="camera-outline" size={18} color={colors.primary} />
-                            <Text style={styles.secondaryButtonText}>Scan Again</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.primaryButton, isFromMuseum && styles.deleteButton]}
-                            onPress={handleAddToMuseum}
-                        >
-                            <Ionicons
-                                name={isFromMuseum ? "trash" : (isSaved ? "checkmark" : "bookmark")}
-                                size={18}
-                                color={colors.background}
-                            />
-                            <Text style={styles.primaryButtonText}>
-                                {isFromMuseum ? 'Delete from Museum' : (isSaved ? 'Saved! View Museum' : 'Save to Museum')}
-                            </Text>
-                        </TouchableOpacity>
+                        {hasMoreObjects && !isFromMuseum ? (
+                            <>
+                                <TouchableOpacity
+                                    style={[styles.primaryButton, { flex: 1 }]}
+                                    onPress={handleExploreMore}
+                                >
+                                    <Ionicons name="layers" size={18} color={colors.background} />
+                                    <Text style={styles.primaryButtonText}>
+                                        Explore {remainingCount} More
+                                    </Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[styles.secondaryButton, { maxWidth: 120 }]}
+                                    onPress={handleScanAnother}
+                                >
+                                    <Ionicons name="camera-outline" size={18} color={colors.primary} />
+                                    <Text style={styles.secondaryButtonText}>New Photo</Text>
+                                </TouchableOpacity>
+                            </>
+                        ) : (
+                            <>
+                                <TouchableOpacity style={styles.secondaryButton} onPress={handleScanAnother}>
+                                    <Ionicons name="camera-outline" size={18} color={colors.primary} />
+                                    <Text style={styles.secondaryButtonText}>Scan Again</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.primaryButton, isFromMuseum && styles.deleteButton]}
+                                    onPress={handleAddToMuseum}
+                                >
+                                    <Ionicons
+                                        name={isFromMuseum ? "trash" : (isSaved ? "checkmark" : "bookmark")}
+                                        size={18}
+                                        color={colors.background}
+                                    />
+                                    <Text style={styles.primaryButtonText}>
+                                        {isFromMuseum ? 'Delete' : (isSaved ? 'Saved!' : 'Save')}
+                                    </Text>
+                                </TouchableOpacity>
+                            </>
+                        )}
                     </View>
                 ) : (
                     <View style={styles.navigationButtons}>
@@ -442,6 +576,25 @@ const styles = StyleSheet.create({
         padding: 20,
         paddingBottom: 30,
     },
+    sessionBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        backgroundColor: 'rgba(0, 191, 255, 0.1)',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        marginBottom: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(0, 191, 255, 0.3)',
+    },
+    sessionBannerText: {
+        flex: 1,
+        fontFamily: fonts.body,
+        fontSize: 13,
+        color: colors.primary,
+        lineHeight: 18,
+    },
     imageContainer: {
         width: '100%',
         height: 180,
@@ -453,6 +606,16 @@ const styles = StyleSheet.create({
     image: {
         width: '100%',
         height: '100%',
+    },
+    cropLoadingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.3)',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     imageOverlay: {
         position: 'absolute',
