@@ -34,6 +34,7 @@ export default function LearningContentScreen() {
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [hasMoreObjects, setHasMoreObjects] = useState(false);
     const [remainingCount, setRemainingCount] = useState(0);
+    const [isLoadingSession, setIsLoadingSession] = useState(true);
 
     // Image cropping states
     const [croppedImageUri, setCroppedImageUri] = useState<string | null>(null);
@@ -104,14 +105,20 @@ export default function LearningContentScreen() {
             if (sid) {
                 setSessionId(sid);
 
-                const hasMore = await sessionManager.hasUnexploredObjects(sid);
-                setHasMoreObjects(hasMore);
+                try {
+                    const hasMore = await sessionManager.hasUnexploredObjects(sid);
+                    setHasMoreObjects(hasMore);
 
-                if (hasMore) {
-                    const unexplored = await sessionManager.getUnexploredObjects(sid);
-                    setRemainingCount(unexplored.length);
+                    if (hasMore) {
+                        const unexplored = await sessionManager.getUnexploredObjects(sid);
+                        setRemainingCount(unexplored.length);
+                    }
+                } catch (error) {
+                    console.error('Error checking session:', error);
+                    // Session might not exist yet, that's okay
                 }
             }
+            setIsLoadingSession(false); // Mark as loaded
         };
 
         checkSession();
@@ -159,6 +166,7 @@ export default function LearningContentScreen() {
             const session = await sessionManager.getSession(sessionId);
             if (session) {
                 navigation.navigate('ObjectSelection', {
+                    sessionId: sessionId,
                     imageUri: session.fullImageUri,
                     detectedObjects: session.detectedObjects,
                 });
@@ -223,19 +231,23 @@ export default function LearningContentScreen() {
 
             // Mark object as explored in session
             if (sessionId) {
-                // We need the object ID - let's add it to route params
                 const objectId = route.params?.objectId;
                 if (objectId) {
                     await sessionManager.markObjectAsExplored(sessionId, objectId);
                     console.log(`✓ Marked ${result.objectName} as explored`);
 
-                    // Refresh remaining count
-                    const hasMore = await sessionManager.hasUnexploredObjects(sessionId);
-                    setHasMoreObjects(hasMore);
+                    // ✅ REFRESH SESSION STATE IMMEDIATELY
+                    const updatedSession = await sessionManager.getSession(sessionId);
+                    if (updatedSession) {
+                        const hasMore = updatedSession.exploredObjectIds.length < updatedSession.detectedObjects.length;
+                        setHasMoreObjects(hasMore);
 
-                    if (hasMore) {
-                        const unexplored = await sessionManager.getUnexploredObjects(sessionId);
-                        setRemainingCount(unexplored.length);
+                        if (hasMore) {
+                            const unexploredCount = updatedSession.detectedObjects.length - updatedSession.exploredObjectIds.length;
+                            setRemainingCount(unexploredCount);
+                        }
+
+                        console.log(`📊 Session progress: ${updatedSession.exploredObjectIds.length}/${updatedSession.detectedObjects.length}`);
                     }
                 }
             }

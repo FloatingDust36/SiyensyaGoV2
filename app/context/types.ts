@@ -63,7 +63,7 @@ export type AppContextType = {
 
     // Discovery Sessions
     currentSession: DiscoverySessionState | null;
-    createSession: (imageUri: string, objects: DetectedObject[], context?: SceneContext) => string;
+    createSession: (imageUri: string, objects: DetectedObject[], context?: SceneContext) => Promise<string>;
     getSession: (sessionId: string) => DiscoverySessionState | null;
     markObjectAsExplored: (sessionId: string, objectId: string) => void;
     clearExpiredSessions: () => void;

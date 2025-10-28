@@ -430,23 +430,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
 
     // Create Session - Start new discovery session
-    const createSession = (
+    const createSession = async (
         imageUri: string,
         objects: DetectedObject[],
         context?: SceneContext
-    ): string => {
-        // Synchronous wrapper for async session creation
-        sessionManager.createSession(imageUri, objects, context).then(sessionId => {
-            // Update current session state
-            sessionManager.getSession(sessionId).then(session => {
-                if (session) {
-                    setCurrentSession(session);
-                }
-            });
-        });
+    ): Promise<string> => {
+        try {
+            // Synchronous session creation - wait for completion
+            const sessionId = await sessionManager.createSession(imageUri, objects, context);
 
-        // Return temporary ID immediately (async operation continues in background)
-        return `session_${Date.now()}`;
+            // Update current session state
+            const session = await sessionManager.getSession(sessionId);
+            if (session) {
+                setCurrentSession(session);
+                console.log(`✓ Session ${sessionId} created and set as current`);
+            }
+
+            return sessionId;
+        } catch (error) {
+            console.error('Error creating session:', error);
+            throw error; // Propagate error instead of returning temp ID
+        }
     };
 
     // Get Session - Retrieve session by ID

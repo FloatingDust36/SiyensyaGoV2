@@ -50,34 +50,31 @@ export default function DiscoverySessionScreen() {
     // Load session and scene context
     React.useEffect(() => {
         const loadSession = async () => {
-            // Try to get sessionId from route params first
             const paramSessionId = route.params?.sessionId;
 
             if (paramSessionId) {
-                // Session ID provided directly
                 setSessionId(paramSessionId);
-                const session = await sessionManager.getSession(paramSessionId);
-                if (session) {
-                    if (session.context) {
-                        setSceneContext(session.context);
+
+                try {
+                    const session = await sessionManager.getSession(paramSessionId);
+                    if (session) {
+                        if (session.context) {
+                            setSceneContext(session.context);
+                            console.log(`✓ Loaded scene context: ${session.context.location}`);
+                        }
+                        setExploredObjectIds(session.exploredObjectIds || []);
+                        console.log(`✓ Session loaded: ${session.exploredObjectIds.length}/${session.detectedObjects.length} explored`);
+                    } else {
+                        console.warn('⚠️ Session not found:', paramSessionId);
                     }
-                    // Load explored object IDs
-                    setExploredObjectIds(session.exploredObjectIds || []);
+                } catch (error) {
+                    console.error('Error loading session:', error);
                 }
             } else {
-                // Fallback: Find session by matching image URI
-                const sessions = await sessionManager.getAllSessions();
-                const matchingSession = sessions.find(s => s.fullImageUri === imageUri);
-                if (matchingSession) {
-                    setSessionId(matchingSession.sessionId);
-                    if (matchingSession.context) {
-                        setSceneContext(matchingSession.context);
-                    }
-                    // Load explored object IDs
-                    setExploredObjectIds(matchingSession.exploredObjectIds || []);
-                }
+                console.log('ℹ️ No session ID provided - standalone mode');
             }
         };
+
         loadSession();
     }, [imageUri, route.params?.sessionId]);
 

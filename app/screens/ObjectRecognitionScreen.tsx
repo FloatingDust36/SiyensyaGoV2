@@ -143,7 +143,7 @@ export default function ObjectRecognitionScreen() {
                     const sessionId = await sessionManager.createSession(
                         imageUri,
                         detectionResult.objects,
-                        detectionResult.sceneContext // Optional scene context
+                        detectionResult.sceneContext
                     );
 
                     console.log(`✓ Created session ${sessionId} with ${detectionResult.objects.length} objects`);
@@ -156,7 +156,7 @@ export default function ObjectRecognitionScreen() {
                     // Success haptic
                     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-                    // NAVIGATE TO OBJECTSELECTION WITH SESSION DATA=
+                    // Navigate with sessionId - now guaranteed to exist
                     navigation.replace('ObjectSelection', {
                         sessionId,
                         imageUri,
@@ -164,13 +164,10 @@ export default function ObjectRecognitionScreen() {
                     });
 
                 } catch (sessionError) {
-                    console.error('Error creating session:', sessionError);
-                    // Even if session creation fails, still navigate
-                    // (fallback to sessionless mode)
-                    navigation.replace('ObjectSelection', {
-                        imageUri,
-                        detectedObjects: detectionResult.objects,
-                    });
+                    console.error('❌ Error creating session:', sessionError);
+                    setError('Failed to create discovery session. Please try again.');
+                    setIsDetecting(false);
+                    return; // Don't navigate on error
                 }
             } else {
                 setError('No objects detected in the image. Please try again with a clearer photo.');
