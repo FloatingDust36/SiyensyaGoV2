@@ -72,4 +72,9 @@ export type RootStackParamList = {
             height: number;
         };
     };
+    SessionSummary: {
+        sessionId: string;
+        exploredCount: number;
+        totalCount: number;
+    };
 };

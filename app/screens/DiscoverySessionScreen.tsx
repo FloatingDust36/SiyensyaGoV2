@@ -1,5 +1,4 @@
 // app/screens/DiscoverySessionScreen.tsx
-
 import React, { useState } from 'react';
 import {
     View,
@@ -35,8 +34,20 @@ export default function DiscoverySessionScreen() {
 
     const { imageUri, detectedObjects } = route.params;
 
+    // Session state
     const [sessionId, setSessionId] = useState<string | undefined>(undefined);
+    const [sceneContext, setSceneContext] = useState<any>(null);
+    const [exploredObjectIds, setExploredObjectIds] = useState<string[]>([]);
 
+    // Multi-select state
+    const [selectedObjects, setSelectedObjects] = useState<Set<string>>(new Set());
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [currentlyAnalyzing, setCurrentlyAnalyzing] = useState<string | null>(null);
+
+    // Image layout for bounding box positioning
+    const [imageLayout, setImageLayout] = useState({ width: 0, height: 0 });
+
+    // Load session and scene context
     React.useEffect(() => {
         const loadSession = async () => {
             // Try to get sessionId from route params first
@@ -46,8 +57,12 @@ export default function DiscoverySessionScreen() {
                 // Session ID provided directly
                 setSessionId(paramSessionId);
                 const session = await sessionManager.getSession(paramSessionId);
-                if (session?.context) {
-                    setSceneContext(session.context);
+                if (session) {
+                    if (session.context) {
+                        setSceneContext(session.context);
+                    }
+                    // Load explored object IDs
+                    setExploredObjectIds(session.exploredObjectIds || []);
                 }
             } else {
                 // Fallback: Find session by matching image URI
@@ -58,42 +73,22 @@ export default function DiscoverySessionScreen() {
                     if (matchingSession.context) {
                         setSceneContext(matchingSession.context);
                     }
+                    // Load explored object IDs
+                    setExploredObjectIds(matchingSession.exploredObjectIds || []);
                 }
             }
         };
         loadSession();
     }, [imageUri, route.params?.sessionId]);
 
-    // Get session from sessionManager (we'll need sessionId later)
-    const [sceneContext, setSceneContext] = useState<any>(null);
-
-    // Multi-select state
-    const [selectedObjects, setSelectedObjects] = useState<Set<string>>(new Set());
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [currentlyAnalyzing, setCurrentlyAnalyzing] = useState<string | null>(null);
-
-    // Image layout for bounding box positioning
-    const [imageLayout, setImageLayout] = useState({ width: 0, height: 0 });
-
-    // Load scene context from most recent session
-    React.useEffect(() => {
-        const loadSceneContext = async () => {
-            const sessions = await sessionManager.getAllSessions();
-            if (sessions.length > 0) {
-                // Get most recent session
-                const latestSession = sessions.sort((a, b) => b.createdAt - a.createdAt)[0];
-                setSceneContext(latestSession.context);
-            }
-        };
-        loadSceneContext();
-    }, []);
-
     const handleImageLayout = (event: any) => {
         const { width, height } = event.nativeEvent.layout;
         setImageLayout({ width, height });
     };
 
-    // Toggle object selection (for multi-select mode)
+    /**
+     * Toggle object selection (for multi-select mode)
+     */
     const toggleObjectSelection = async (objectId: string) => {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -108,7 +103,9 @@ export default function DiscoverySessionScreen() {
         });
     };
 
-    // Quick learn - single object immediate learning
+    /**
+     * Quick learn - single object immediate learning
+     */
     const handleQuickLearn = async (object: DetectedObject) => {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         setIsAnalyzing(true);
@@ -120,7 +117,7 @@ export default function DiscoverySessionScreen() {
                 object.name,
                 object.boundingBox,
                 user.gradeLevel,
-                sceneContext // Pass scene context for contextual learning
+                sceneContext
             );
 
             if ('error' in result) {
@@ -132,9 +129,9 @@ export default function DiscoverySessionScreen() {
 
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-            // Navigate to learning content
+            // Navigate to learning content with session info
             navigation.navigate('LearningContent', {
-                sessionId,
+                sessionId: sessionId || undefined,
                 objectId: object.id,
                 imageUri,
                 boundingBox: object.boundingBox,
@@ -160,8 +157,6 @@ export default function DiscoverySessionScreen() {
 
     /**
      * Batch learning - analyze multiple selected objects
-     * For now, we'll just learn about the first one and show alert
-     * (Full batch queue implementation in future)
      */
     const handleBatchLearn = () => {
         if (selectedObjects.size === 0) {
@@ -176,7 +171,6 @@ export default function DiscoverySessionScreen() {
                 {
                     text: 'Start Learning',
                     onPress: () => {
-                        // Get first selected object
                         const firstObjectId = Array.from(selectedObjects)[0];
                         const firstObject = detectedObjects.find(obj => obj.id === firstObjectId);
                         if (firstObject) {
@@ -189,7 +183,9 @@ export default function DiscoverySessionScreen() {
         );
     };
 
-    // Handle "Not finding what you want?" fallback
+    /**
+     * Handle "Not finding what you want?" fallback
+     */
     const handleFallbackOptions = () => {
         Alert.alert(
             'Not finding what you want?',
@@ -216,7 +212,9 @@ export default function DiscoverySessionScreen() {
         );
     };
 
-    // Get confidence color coding
+    /**
+     * Get confidence color coding
+     */
     const getConfidenceColor = (confidence: number): string => {
         if (confidence >= 85) return colors.success;
         if (confidence >= 70) return colors.primary;
@@ -226,6 +224,10 @@ export default function DiscoverySessionScreen() {
     const handleClose = () => {
         navigation.navigate('MainTabs', { screen: 'Camera' });
     };
+
+    // Filter unexplored objects
+    const unexploredObjects = detectedObjects.filter(obj => !exploredObjectIds.includes(obj.id));
+    const exploredObjects = detectedObjects.filter(obj => exploredObjectIds.includes(obj.id));
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
@@ -238,7 +240,10 @@ export default function DiscoverySessionScreen() {
                 <View style={styles.headerCenter}>
                     <Text style={styles.headerTitle}>Discovery Session</Text>
                     <Text style={styles.headerSubtitle}>
-                        Found {detectedObjects.length} {detectedObjects.length === 1 ? 'object' : 'objects'}
+                        {exploredObjectIds.length > 0
+                            ? `${unexploredObjects.length} unexplored ${unexploredObjects.length === 1 ? 'object' : 'objects'}`
+                            : `Found ${detectedObjects.length} ${detectedObjects.length === 1 ? 'object' : 'objects'}`
+                        }
                     </Text>
                 </View>
 
@@ -284,76 +289,128 @@ export default function DiscoverySessionScreen() {
                 {/* Object List */}
                 <View style={styles.objectListSection}>
                     <Text style={styles.sectionTitle}>Detected Objects</Text>
-                    <Text style={styles.sectionSubtitle}>
-                        Tap to learn immediately, or select multiple for batch learning
-                    </Text>
+                    {unexploredObjects.length > 0 && (
+                        <Text style={styles.sectionSubtitle}>
+                            Tap to learn immediately, or select multiple for batch learning
+                        </Text>
+                    )}
 
-                    {detectedObjects.map((object) => {
-                        const isSelected = selectedObjects.has(object.id);
-                        const confidenceColor = getConfidenceColor(object.confidence);
-                        const isAnalyzingThis = currentlyAnalyzing === object.id;
-
-                        return (
-                            <View
-                                key={object.id}
-                                style={[
-                                    styles.objectCard,
-                                    isSelected && styles.objectCardSelected,
-                                    isAnalyzingThis && styles.objectCardAnalyzing
-                                ]}
+                    {unexploredObjects.length === 0 ? (
+                        // Empty state - all objects explored
+                        <View style={styles.emptyState}>
+                            <Ionicons name="checkmark-done-circle" size={80} color={colors.success} />
+                            <Text style={styles.emptyStateTitle}>All Objects Explored!</Text>
+                            <Text style={styles.emptyStateSubtitle}>
+                                You've learned about all {detectedObjects.length} objects from this photo.
+                                Great job! 🎉
+                            </Text>
+                            <TouchableOpacity
+                                style={styles.newPhotoButton}
+                                onPress={() => {
+                                    if (sessionId) {
+                                        navigation.replace('SessionSummary', {
+                                            sessionId,
+                                            exploredCount: detectedObjects.length,
+                                            totalCount: detectedObjects.length
+                                        });
+                                    } else {
+                                        navigation.navigate('MainTabs', { screen: 'Camera' });
+                                    }
+                                }}
                             >
-                                {/* Checkbox for multi-select */}
-                                <TouchableOpacity
-                                    style={styles.checkboxContainer}
-                                    onPress={() => toggleObjectSelection(object.id)}
-                                    disabled={isAnalyzing}
-                                >
-                                    {isSelected ? (
-                                        <Ionicons name="checkbox" size={24} color={colors.secondary} />
-                                    ) : (
-                                        <Ionicons name="square-outline" size={24} color={colors.lightGray} />
-                                    )}
-                                </TouchableOpacity>
+                                <Ionicons name="trophy" size={20} color={colors.background} />
+                                <Text style={styles.newPhotoButtonText}>View Summary</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        unexploredObjects.map((object) => {
+                            const isSelected = selectedObjects.has(object.id);
+                            const confidenceColor = getConfidenceColor(object.confidence);
+                            const isAnalyzingThis = currentlyAnalyzing === object.id;
 
-                                {/* Object Info */}
-                                <View style={styles.objectInfo}>
-                                    <Text style={styles.objectName}>{object.name}</Text>
-                                    <View style={styles.objectMeta}>
-                                        <View
-                                            style={[
-                                                styles.confidenceIndicator,
-                                                {
-                                                    backgroundColor: `${confidenceColor}20`,
-                                                    borderColor: confidenceColor
-                                                }
-                                            ]}
-                                        >
-                                            <Text style={[styles.confidenceLabel, { color: confidenceColor }]}>
-                                                {object.confidence}% confident
-                                            </Text>
+                            return (
+                                <View
+                                    key={object.id}
+                                    style={[
+                                        styles.objectCard,
+                                        isSelected && styles.objectCardSelected,
+                                        isAnalyzingThis && styles.objectCardAnalyzing
+                                    ]}
+                                >
+                                    {/* Checkbox for multi-select */}
+                                    <TouchableOpacity
+                                        style={styles.checkboxContainer}
+                                        onPress={() => toggleObjectSelection(object.id)}
+                                        disabled={isAnalyzing}
+                                    >
+                                        {isSelected ? (
+                                            <Ionicons name="checkbox" size={24} color={colors.secondary} />
+                                        ) : (
+                                            <Ionicons name="square-outline" size={24} color={colors.lightGray} />
+                                        )}
+                                    </TouchableOpacity>
+
+                                    {/* Object Info */}
+                                    <View style={styles.objectInfo}>
+                                        <Text style={styles.objectName}>{object.name}</Text>
+                                        <View style={styles.objectMeta}>
+                                            <View
+                                                style={[
+                                                    styles.confidenceIndicator,
+                                                    {
+                                                        backgroundColor: `${confidenceColor}20`,
+                                                        borderColor: confidenceColor
+                                                    }
+                                                ]}
+                                            >
+                                                <Text style={[styles.confidenceLabel, { color: confidenceColor }]}>
+                                                    {object.confidence}% confident
+                                                </Text>
+                                            </View>
                                         </View>
                                     </View>
-                                </View>
 
-                                {/* Quick Learn Button */}
-                                <TouchableOpacity
-                                    style={[styles.learnButton, { backgroundColor: confidenceColor }]}
-                                    onPress={() => handleQuickLearn(object)}
-                                    disabled={isAnalyzing}
-                                >
-                                    {isAnalyzingThis ? (
-                                        <ActivityIndicator size="small" color={colors.background} />
-                                    ) : (
-                                        <>
-                                            <Text style={styles.learnButtonText}>Learn</Text>
-                                            <Ionicons name="arrow-forward" size={16} color={colors.background} />
-                                        </>
-                                    )}
-                                </TouchableOpacity>
-                            </View>
-                        );
-                    })}
+                                    {/* Quick Learn Button */}
+                                    <TouchableOpacity
+                                        style={[styles.learnButton, { backgroundColor: confidenceColor }]}
+                                        onPress={() => handleQuickLearn(object)}
+                                        disabled={isAnalyzing}
+                                    >
+                                        {isAnalyzingThis ? (
+                                            <ActivityIndicator size="small" color={colors.background} />
+                                        ) : (
+                                            <>
+                                                <Text style={styles.learnButtonText}>Learn</Text>
+                                                <Ionicons name="arrow-forward" size={16} color={colors.background} />
+                                            </>
+                                        )}
+                                    </TouchableOpacity>
+                                </View>
+                            );
+                        })
+                    )}
                 </View>
+
+                {/* Already Explored Section */}
+                {exploredObjects.length > 0 && (
+                    <View style={styles.exploredSection}>
+                        <View style={styles.exploredHeader}>
+                            <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                            <Text style={styles.exploredTitle}>
+                                Already Explored ({exploredObjects.length})
+                            </Text>
+                        </View>
+                        <Text style={styles.exploredSubtitle}>
+                            Great job! You've learned about these objects from this photo.
+                        </Text>
+                        {exploredObjects.map((object) => (
+                            <View key={object.id} style={styles.exploredCard}>
+                                <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                                <Text style={styles.exploredObjectName}>{object.name}</Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
 
                 {/* Not Finding What You Want? */}
                 <TouchableOpacity style={styles.fallbackCard} onPress={handleFallbackOptions}>
@@ -368,7 +425,7 @@ export default function DiscoverySessionScreen() {
                 <View style={{ height: 100 }} />
             </ScrollView>
 
-            {/* Bottom Action Bar - Shows when objects selected */}
+            {/* Bottom Action Bar */}
             {selectedObjects.size > 0 && (
                 <View style={styles.bottomBar}>
                     <Text style={styles.selectedCount}>
@@ -568,6 +625,78 @@ const styles = StyleSheet.create({
         fontFamily: fonts.heading,
         fontSize: 13,
         color: colors.background,
+    },
+    emptyState: {
+        alignItems: 'center',
+        paddingVertical: 40,
+        paddingHorizontal: 20,
+    },
+    emptyStateTitle: {
+        fontFamily: fonts.heading,
+        fontSize: 24,
+        color: colors.success,
+        marginTop: 20,
+        marginBottom: 8,
+    },
+    emptyStateSubtitle: {
+        fontFamily: fonts.body,
+        fontSize: 15,
+        color: colors.lightGray,
+        textAlign: 'center',
+        lineHeight: 22,
+        marginBottom: 24,
+    },
+    newPhotoButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        backgroundColor: colors.primary,
+        paddingVertical: 14,
+        paddingHorizontal: 24,
+        borderRadius: 25,
+    },
+    newPhotoButtonText: {
+        fontFamily: fonts.heading,
+        fontSize: 16,
+        color: colors.background,
+    },
+    exploredSection: {
+        padding: 16,
+        marginTop: 16,
+    },
+    exploredHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 8,
+    },
+    exploredTitle: {
+        fontFamily: fonts.heading,
+        fontSize: 18,
+        color: colors.success,
+    },
+    exploredSubtitle: {
+        fontFamily: fonts.body,
+        fontSize: 13,
+        color: colors.lightGray,
+        marginBottom: 12,
+        lineHeight: 18,
+    },
+    exploredCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        backgroundColor: 'rgba(57, 255, 20, 0.1)',
+        padding: 12,
+        borderRadius: 12,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(57, 255, 20, 0.3)',
+    },
+    exploredObjectName: {
+        fontFamily: fonts.heading,
+        fontSize: 14,
+        color: colors.text,
     },
     fallbackCard: {
         flexDirection: 'row',
