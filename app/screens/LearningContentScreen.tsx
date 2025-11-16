@@ -236,7 +236,7 @@ export default function LearningContentScreen() {
                     await sessionManager.markObjectAsExplored(sessionId, objectId);
                     console.log(`✓ Marked ${result.objectName} as explored`);
 
-                    // ✅ REFRESH SESSION STATE IMMEDIATELY
+                    // Refresh session state immediately
                     const updatedSession = await sessionManager.getSession(sessionId);
                     if (updatedSession) {
                         const hasMore = updatedSession.exploredObjectIds.length < updatedSession.detectedObjects.length;

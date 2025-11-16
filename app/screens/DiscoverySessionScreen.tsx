@@ -292,8 +292,8 @@ export default function DiscoverySessionScreen() {
                         </Text>
                     )}
 
-                    {unexploredObjects.length === 0 ? (
-                        // Empty state - all objects explored
+                    {unexploredObjects.length === 0 && exploredObjects.length > 0 ? (
+                        // Empty state - all objects explored (SUCCESS!)
                         <View style={styles.emptyState}>
                             <Ionicons name="checkmark-done-circle" size={80} color={colors.success} />
                             <Text style={styles.emptyStateTitle}>All Objects Explored!</Text>
@@ -319,7 +319,24 @@ export default function DiscoverySessionScreen() {
                                 <Text style={styles.newPhotoButtonText}>View Summary</Text>
                             </TouchableOpacity>
                         </View>
+                    ) : unexploredObjects.length === 0 ? (
+                        // True empty state - no objects detected at all (EDGE CASE)
+                        <View style={styles.emptyState}>
+                            <Ionicons name="search-outline" size={80} color={colors.lightGray} />
+                            <Text style={styles.emptyStateTitle}>No Objects Detected</Text>
+                            <Text style={styles.emptyStateSubtitle}>
+                                Try taking a clearer photo with better lighting.
+                            </Text>
+                            <TouchableOpacity
+                                style={styles.newPhotoButton}
+                                onPress={() => navigation.navigate('MainTabs', { screen: 'Camera' })}
+                            >
+                                <Ionicons name="camera" size={20} color={colors.background} />
+                                <Text style={styles.newPhotoButtonText}>Try Again</Text>
+                            </TouchableOpacity>
+                        </View>
                     ) : (
+                        // Regular object list - show unexplored objects
                         unexploredObjects.map((object) => {
                             const isSelected = selectedObjects.has(object.id);
                             const confidenceColor = getConfidenceColor(object.confidence);
