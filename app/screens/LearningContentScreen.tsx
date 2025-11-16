@@ -35,6 +35,7 @@ export default function LearningContentScreen() {
     const [hasMoreObjects, setHasMoreObjects] = useState(false);
     const [remainingCount, setRemainingCount] = useState(0);
     const [isLoadingSession, setIsLoadingSession] = useState(true);
+    const [exploredObjectIds, setExploredObjectIds] = useState<string[]>([]);
 
     // Image cropping states
     const [croppedImageUri, setCroppedImageUri] = useState<string | null>(null);
@@ -106,23 +107,74 @@ export default function LearningContentScreen() {
                 setSessionId(sid);
 
                 try {
-                    const hasMore = await sessionManager.hasUnexploredObjects(sid);
-                    setHasMoreObjects(hasMore);
+                    const session = await sessionManager.getSession(sid);
+                    if (session) {
+                        if (session.context) {
+                            console.log(`✓ Loaded scene context: ${session.context.location}`);
+                        }
+                        setExploredObjectIds(session.exploredObjectIds || []);
 
-                    if (hasMore) {
-                        const unexplored = await sessionManager.getUnexploredObjects(sid);
-                        setRemainingCount(unexplored.length);
+                        const hasMore = session.exploredObjectIds.length < session.detectedObjects.length;
+                        setHasMoreObjects(hasMore);
+
+                        if (hasMore) {
+                            const unexplored = session.detectedObjects.length - session.exploredObjectIds.length;
+                            setRemainingCount(unexplored);
+                        }
+
+                        console.log(`✓ Session loaded: ${session.exploredObjectIds.length}/${session.detectedObjects.length} explored`);
+                    } else {
+                        console.warn('⚠️ Session not found:', sid);
                     }
                 } catch (error) {
-                    console.error('Error checking session:', error);
-                    // Session might not exist yet, that's okay
+                    console.error('Error loading session:', error);
                 }
             }
-            setIsLoadingSession(false); // Mark as loaded
+            setIsLoadingSession(false);
         };
 
         checkSession();
     }, [route.params?.sessionId]);
+
+    // Auto-mark as explored when user views content (independent of saving)
+    useEffect(() => {
+        const markAsExplored = async () => {
+            const sid = route.params?.sessionId;
+            const objId = route.params?.objectId;
+
+            if (sid && objId) {
+                try {
+                    // Check if already explored
+                    const session = await sessionManager.getSession(sid);
+                    if (session && !session.exploredObjectIds.includes(objId)) {
+                        await sessionManager.markObjectAsExplored(sid, objId);
+                        console.log(`✓ Auto-marked ${result.objectName} as explored`);
+
+                        // Refresh session state
+                        const updatedSession = await sessionManager.getSession(sid);
+                        if (updatedSession) {
+                            const hasMore = updatedSession.exploredObjectIds.length < updatedSession.detectedObjects.length;
+                            setHasMoreObjects(hasMore);
+
+                            if (hasMore) {
+                                const unexploredCount = updatedSession.detectedObjects.length - updatedSession.exploredObjectIds.length;
+                                setRemainingCount(unexploredCount);
+                            }
+
+                            setExploredObjectIds(updatedSession.exploredObjectIds);
+                            console.log(`📊 Session progress: ${updatedSession.exploredObjectIds.length}/${updatedSession.detectedObjects.length}`);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error auto-marking as explored:', error);
+                }
+            }
+        };
+
+        // Mark as explored after a short delay (ensures user actually viewed content)
+        const timer = setTimeout(markAsExplored, 1000);
+        return () => clearTimeout(timer);
+    }, [route.params?.sessionId, route.params?.objectId, result.objectName]);
 
     const changeSection = (newIndex: number) => {
         Animated.parallel([
@@ -229,14 +281,9 @@ export default function LearningContentScreen() {
 
             setIsSaved(true);
 
-            // Mark object as explored in session
+            // Refresh session state (object already marked as explored in useEffect)
             if (sessionId) {
-                const objectId = route.params?.objectId;
-                if (objectId) {
-                    await sessionManager.markObjectAsExplored(sessionId, objectId);
-                    console.log(`✓ Marked ${result.objectName} as explored`);
-
-                    // Refresh session state immediately
+                try {
                     const updatedSession = await sessionManager.getSession(sessionId);
                     if (updatedSession) {
                         const hasMore = updatedSession.exploredObjectIds.length < updatedSession.detectedObjects.length;
@@ -249,6 +296,8 @@ export default function LearningContentScreen() {
 
                         console.log(`📊 Session progress: ${updatedSession.exploredObjectIds.length}/${updatedSession.detectedObjects.length}`);
                     }
+                } catch (error) {
+                    console.error('Error refreshing session state:', error);
                 }
             }
 

@@ -11,7 +11,7 @@ import {
     Alert,
     Dimensions
 } from 'react-native';
-import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
+import { RouteProp, useRoute, useNavigation, useIsFocused } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList, DetectedObject } from '../navigation/types';
@@ -30,6 +30,7 @@ const { width } = Dimensions.get('window');
 export default function DiscoverySessionScreen() {
     const route = useRoute<DiscoverySessionRouteProp>();
     const navigation = useNavigation<NavigationProp>();
+    const isFocused = useIsFocused();
     const { user } = useApp();
 
     const { imageUri, detectedObjects } = route.params;
@@ -76,7 +77,7 @@ export default function DiscoverySessionScreen() {
         };
 
         loadSession();
-    }, [imageUri, route.params?.sessionId]);
+    }, [imageUri, route.params?.sessionId, isFocused]);
 
     const handleImageLayout = (event: any) => {
         const { width, height } = event.nativeEvent.layout;
