@@ -45,6 +45,10 @@ export default function DiscoverySessionScreen() {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [currentlyAnalyzing, setCurrentlyAnalyzing] = useState<string | null>(null);
 
+    // Batch learning state
+    const [batchQueue, setBatchQueue] = useState<DetectedObject[]>([]);
+    const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
+
     // Image layout for bounding box positioning
     const [imageLayout, setImageLayout] = useState({ width: 0, height: 0 });
 
@@ -154,7 +158,7 @@ export default function DiscoverySessionScreen() {
     };
 
     /**
-     * Batch learning - analyze multiple selected objects
+     * Batch learning - analyze multiple selected objects sequentially
      */
     const handleBatchLearn = () => {
         if (selectedObjects.size === 0) {
@@ -162,18 +166,22 @@ export default function DiscoverySessionScreen() {
             return;
         }
 
+        // Create queue from selected objects
+        const selectedObjectsArray = Array.from(selectedObjects)
+            .map(id => detectedObjects.find(obj => obj.id === id))
+            .filter(obj => obj !== undefined) as DetectedObject[];
+
         Alert.alert(
             'Batch Learning',
-            `You selected ${selectedObjects.size} objects. We'll learn about them one by one!`,
+            `You selected ${selectedObjectsArray.length} objects. We'll learn about them one by one!\n\nYou'll automatically move to the next object after each one.`,
             [
                 {
                     text: 'Start Learning',
                     onPress: () => {
-                        const firstObjectId = Array.from(selectedObjects)[0];
-                        const firstObject = detectedObjects.find(obj => obj.id === firstObjectId);
-                        if (firstObject) {
-                            handleQuickLearn(firstObject);
-                        }
+                        setBatchQueue(selectedObjectsArray);
+                        setCurrentBatchIndex(0);
+                        // Start with first object
+                        handleQuickLearn(selectedObjectsArray[0]);
                     }
                 },
                 { text: 'Cancel', style: 'cancel' }

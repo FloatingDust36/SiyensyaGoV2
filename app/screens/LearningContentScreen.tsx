@@ -226,6 +226,32 @@ export default function LearningContentScreen() {
         }
     };
 
+    const handleBackToSession = async () => {
+        if (sessionId) {
+            const session = await sessionManager.getSession(sessionId);
+            if (session) {
+                // Check if all objects explored
+                const allExplored = session.exploredObjectIds.length >= session.detectedObjects.length;
+
+                if (allExplored) {
+                    // Navigate to summary
+                    navigation.replace('SessionSummary', {
+                        sessionId,
+                        exploredCount: session.exploredObjectIds.length,
+                        totalCount: session.detectedObjects.length
+                    });
+                } else {
+                    // Navigate back to object selection
+                    navigation.navigate('ObjectSelection', {
+                        sessionId: sessionId,
+                        imageUri: session.fullImageUri,
+                        detectedObjects: session.detectedObjects,
+                    });
+                }
+            }
+        }
+    };
+
     const handleAddToMuseum = async () => {
         if (isFromMuseum) {
             Alert.alert(
@@ -301,26 +327,12 @@ export default function LearningContentScreen() {
                 }
             }
 
-            // If part of session, show different message
-            if (hasMoreObjects) {
-                Alert.alert(
-                    'Saved!',
-                    `"${result.objectName}" added to Museum!\n\n${remainingCount} more ${remainingCount === 1 ? 'object' : 'objects'} from this photo to explore.`,
-                    [
-                        { text: 'Explore More', onPress: handleExploreMore },
-                        { text: 'View Museum', onPress: () => navigation.navigate('MainTabs', { screen: 'Museum' }) },
-                    ]
-                );
-            } else {
-                Alert.alert(
-                    'Saved!',
-                    `"${result.objectName}" has been added to your Museum!`,
-                    [
-                        { text: 'View Museum', onPress: () => navigation.navigate('MainTabs', { screen: 'Museum' }) },
-                        { text: 'Continue Learning', style: 'cancel' }
-                    ]
-                );
-            }
+            // Show success message
+            Alert.alert(
+                'Saved!',
+                `"${result.objectName}" has been added to your Museum!`,
+                [{ text: 'OK' }]
+            );
         } catch (error) {
             Alert.alert('Error', 'Failed to save discovery. Please try again.');
             console.error('Save error:', error);
@@ -497,24 +509,25 @@ export default function LearningContentScreen() {
             <SafeAreaView style={styles.bottomNav} edges={['bottom']}>
                 {currentSection === SECTIONS.length - 1 ? (
                     <View style={styles.finalButtons}>
-                        {hasMoreObjects && !isFromMuseum ? (
+                        {/* If part of session, show back to session button */}
+                        {sessionId && !isFromMuseum ? (
                             <>
-                                <TouchableOpacity
-                                    style={[styles.primaryButton, { flex: 1 }]}
-                                    onPress={handleExploreMore}
-                                >
-                                    <Ionicons name="layers" size={18} color={colors.background} />
-                                    <Text style={styles.primaryButtonText}>
-                                        Explore {remainingCount} More
-                                    </Text>
-                                </TouchableOpacity>
-
                                 <TouchableOpacity
                                     style={[styles.secondaryButton, { maxWidth: 120 }]}
                                     onPress={handleScanAnother}
                                 >
                                     <Ionicons name="camera-outline" size={18} color={colors.primary} />
                                     <Text style={styles.secondaryButtonText}>New Photo</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[styles.primaryButton, { flex: 1 }]}
+                                    onPress={handleBackToSession}
+                                >
+                                    <Ionicons name="arrow-back" size={18} color={colors.background} />
+                                    <Text style={styles.primaryButtonText}>
+                                        Back to Session
+                                    </Text>
                                 </TouchableOpacity>
                             </>
                         ) : (
