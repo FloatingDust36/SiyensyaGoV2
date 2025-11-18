@@ -65,12 +65,15 @@ export type RootStackParamList = {
         imageUri: string;
         result: AnalysisResult;
         discoveryId?: string;
-        boundingBox?: {        // NEW: Added for cropping support
+        boundingBox?: {
             x: number;
             y: number;
             width: number;
             height: number;
         };
+        // Batch learning parameters
+        batchQueue?: DetectedObject[];
+        currentBatchIndex?: number;
     };
     SessionSummary: {
         sessionId: string;

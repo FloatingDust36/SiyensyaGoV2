@@ -12,6 +12,8 @@ import { saveImagePermanently } from '../services/imageStorage';
 import * as Haptics from 'expo-haptics';
 import { cropImageForObject } from '../utils/imageCropper';
 import { sessionManager } from '../utils/sessionManager';
+import { analyzeSelectedObject } from '../services/gemini';
+import { DetectedObject } from '../navigation/types';
 
 type LearningContentRouteProp = RouteProp<RootStackParamList, 'LearningContent'>;
 type NavigationProp = StackNavigationProp<RootStackParamList>;
@@ -44,6 +46,11 @@ export default function LearningContentScreen() {
     const { addDiscovery, removeDiscovery } = useApp();
     const [isSaved, setIsSaved] = useState(false);
     const [isFromMuseum, setIsFromMuseum] = useState(false);
+
+    // Batch learning states
+    const [batchQueue, setBatchQueue] = useState<DetectedObject[]>([]);
+    const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
+    const [isInBatchMode, setIsInBatchMode] = useState(false);
 
     const imageUri = route.params?.imageUri || '';
     const result = route.params?.result || {
@@ -99,10 +106,19 @@ export default function LearningContentScreen() {
         cropImage();
     }, [imageUri, route.params?.boundingBox, result.objectName]);
 
-    // Check if there are more objects to explore in this session
+    // Check if there are more objects to explore in this session + handle batch mode
     useEffect(() => {
         const checkSession = async () => {
             const sid = route.params?.sessionId;
+
+            // Initialize batch mode if parameters exist
+            if (route.params?.batchQueue && route.params?.currentBatchIndex !== undefined) {
+                setBatchQueue(route.params.batchQueue);
+                setCurrentBatchIndex(route.params.currentBatchIndex);
+                setIsInBatchMode(true);
+                console.log(`📦 Batch mode: Object ${route.params.currentBatchIndex + 1}/${route.params.batchQueue.length}`);
+            }
+
             if (sid) {
                 setSessionId(sid);
 
@@ -134,7 +150,7 @@ export default function LearningContentScreen() {
         };
 
         checkSession();
-    }, [route.params?.sessionId]);
+    }, [route.params?.sessionId, route.params?.batchQueue, route.params?.currentBatchIndex]);
 
     // Auto-mark as explored when user views content (independent of saving)
     useEffect(() => {
@@ -227,7 +243,44 @@ export default function LearningContentScreen() {
     };
 
     const handleBackToSession = async () => {
-        if (sessionId) {
+        // If in batch mode, navigate to next object
+        if (isInBatchMode && batchQueue.length > 0) {
+            const nextIndex = currentBatchIndex + 1;
+
+            if (nextIndex < batchQueue.length) {
+                // More objects in batch queue
+                const nextObject = batchQueue[nextIndex];
+
+                Alert.alert(
+                    'Next Object',
+                    `Learning about: ${nextObject.name}\n\nObject ${nextIndex + 1} of ${batchQueue.length}`,
+                    [
+                        {
+                            text: 'Continue',
+                            onPress: () => navigateToNextBatchObject(nextIndex)
+                        },
+                        {
+                            text: 'Exit Batch',
+                            style: 'cancel',
+                            onPress: () => exitBatchMode()
+                        }
+                    ]
+                );
+            } else {
+                // Batch complete!
+                Alert.alert(
+                    'Batch Complete! 🎉',
+                    `You've learned about all ${batchQueue.length} selected objects!`,
+                    [
+                        {
+                            text: 'Back to Session',
+                            onPress: () => exitBatchMode()
+                        }
+                    ]
+                );
+            }
+        } else if (sessionId) {
+            // Regular session mode
             const session = await sessionManager.getSession(sessionId);
             if (session) {
                 // Check if all objects explored
@@ -248,6 +301,66 @@ export default function LearningContentScreen() {
                         detectedObjects: session.detectedObjects,
                     });
                 }
+            }
+        }
+    };
+
+    const navigateToNextBatchObject = async (nextIndex: number) => {
+        const nextObject = batchQueue[nextIndex];
+        const { user } = useApp();
+
+        try {
+            // Analyze next object
+            const result = await analyzeSelectedObject(
+                imageUri,
+                nextObject.name,
+                nextObject.boundingBox,
+                user.gradeLevel,
+                sceneContext
+            );
+
+            if ('error' in result) {
+                Alert.alert('Analysis Error', result.error);
+                return;
+            }
+
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+            // Navigate to learning content with updated batch info
+            navigation.replace('LearningContent', {
+                sessionId: sessionId || undefined,
+                objectId: nextObject.id,
+                imageUri,
+                boundingBox: nextObject.boundingBox,
+                result: {
+                    objectName: String(result.objectName || nextObject.name),
+                    confidence: Number(result.confidence || nextObject.confidence),
+                    category: String(result.category || 'General'),
+                    funFact: String(result.funFact || ''),
+                    the_science_in_action: String(result.the_science_in_action || ''),
+                    why_it_matters_to_you: String(result.why_it_matters_to_you || ''),
+                    tryThis: String(result.tryThis || ''),
+                    explore_further: String(result.explore_further || '')
+                },
+                batchQueue: batchQueue,
+                currentBatchIndex: nextIndex
+            });
+        } catch (error) {
+            console.error('Error analyzing next object:', error);
+            Alert.alert('Error', 'Failed to analyze next object. Returning to session.');
+            exitBatchMode();
+        }
+    };
+
+    const exitBatchMode = async () => {
+        if (sessionId) {
+            const session = await sessionManager.getSession(sessionId);
+            if (session) {
+                navigation.navigate('ObjectSelection', {
+                    sessionId: sessionId,
+                    imageUri: session.fullImageUri,
+                    detectedObjects: session.detectedObjects,
+                });
             }
         }
     };
@@ -365,7 +478,10 @@ export default function LearningContentScreen() {
                         {result.objectName}
                     </Text>
                     <Text style={styles.progressText}>
-                        Section {currentSection + 1} of {SECTIONS.length}
+                        {isInBatchMode
+                            ? `Object ${currentBatchIndex + 1}/${batchQueue.length} • Section ${currentSection + 1}/${SECTIONS.length}`
+                            : `Section ${currentSection + 1} of ${SECTIONS.length}`
+                        }
                     </Text>
                 </View>
 
@@ -397,14 +513,21 @@ export default function LearningContentScreen() {
                 showsVerticalScrollIndicator={false}
             >
                 {/* Session Info Banner */}
-                {hasMoreObjects && !isFromMuseum && (
+                {isInBatchMode && !isFromMuseum ? (
+                    <View style={[styles.sessionBanner, { backgroundColor: 'rgba(138, 43, 226, 0.1)', borderColor: 'rgba(138, 43, 226, 0.3)' }]}>
+                        <Ionicons name="layers" size={20} color={colors.secondary} />
+                        <Text style={[styles.sessionBannerText, { color: colors.secondary }]}>
+                            Batch Learning: {currentBatchIndex + 1} of {batchQueue.length} objects
+                        </Text>
+                    </View>
+                ) : hasMoreObjects && !isFromMuseum ? (
                     <View style={styles.sessionBanner}>
                         <Ionicons name="information-circle" size={20} color={colors.primary} />
                         <Text style={styles.sessionBannerText}>
                             {remainingCount} more {remainingCount === 1 ? 'object' : 'objects'} from this photo waiting to be explored!
                         </Text>
                     </View>
-                )}
+                ) : null}
 
                 <View style={styles.imageContainer}>
                     <Image

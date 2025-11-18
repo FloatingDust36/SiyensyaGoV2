@@ -157,10 +157,8 @@ export default function DiscoverySessionScreen() {
         }
     };
 
-    /**
-     * Batch learning - analyze multiple selected objects sequentially
-     */
-    const handleBatchLearn = () => {
+    // Batch learning - analyze multiple selected objects sequentially
+    const handleBatchLearn = async () => {
         if (selectedObjects.size === 0) {
             Alert.alert('No Objects Selected', 'Please select at least one object to learn about.');
             return;
@@ -173,20 +171,69 @@ export default function DiscoverySessionScreen() {
 
         Alert.alert(
             'Batch Learning',
-            `You selected ${selectedObjectsArray.length} objects. We'll learn about them one by one!\n\nYou'll automatically move to the next object after each one.`,
+            `You selected ${selectedObjectsArray.length} objects. We'll learn about them one by one!\n\n✨ Auto-navigation enabled - you'll automatically move to the next object after finishing each one.`,
             [
                 {
                     text: 'Start Learning',
-                    onPress: () => {
-                        setBatchQueue(selectedObjectsArray);
-                        setCurrentBatchIndex(0);
-                        // Start with first object
-                        handleQuickLearn(selectedObjectsArray[0]);
-                    }
+                    onPress: () => startBatchLearning(selectedObjectsArray)
                 },
                 { text: 'Cancel', style: 'cancel' }
             ]
         );
+    };
+
+    const startBatchLearning = async (objectsQueue: DetectedObject[]) => {
+        setIsAnalyzing(true);
+        setCurrentlyAnalyzing(objectsQueue[0].id);
+
+        try {
+            // Analyze first object
+            const result = await analyzeSelectedObject(
+                imageUri,
+                objectsQueue[0].name,
+                objectsQueue[0].boundingBox,
+                user.gradeLevel,
+                sceneContext
+            );
+
+            if ('error' in result) {
+                Alert.alert('Analysis Error', result.error);
+                setIsAnalyzing(false);
+                setCurrentlyAnalyzing(null);
+                return;
+            }
+
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+            // Navigate to learning content with batch queue
+            navigation.navigate('LearningContent', {
+                sessionId: sessionId || undefined,
+                objectId: objectsQueue[0].id,
+                imageUri,
+                boundingBox: objectsQueue[0].boundingBox,
+                result: {
+                    objectName: String(result.objectName || objectsQueue[0].name),
+                    confidence: Number(result.confidence || objectsQueue[0].confidence),
+                    category: String(result.category || 'General'),
+                    funFact: String(result.funFact || ''),
+                    the_science_in_action: String(result.the_science_in_action || ''),
+                    why_it_matters_to_you: String(result.why_it_matters_to_you || ''),
+                    tryThis: String(result.tryThis || ''),
+                    explore_further: String(result.explore_further || '')
+                },
+                batchQueue: objectsQueue,
+                currentBatchIndex: 0
+            });
+
+            // Clear selections after starting batch
+            setSelectedObjects(new Set());
+        } catch (error) {
+            console.error('Error starting batch learning:', error);
+            Alert.alert('Error', 'Failed to start batch learning. Please try again.');
+        } finally {
+            setIsAnalyzing(false);
+            setCurrentlyAnalyzing(null);
+        }
     };
 
     /**
