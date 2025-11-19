@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
-import { RootStackParamList, AnalysisResult } from '../navigation/types';
+import { RootStackParamList, AnalysisResult, SceneContext } from '../navigation/types';
 import { colors, fonts } from '../theme/theme';
 import { useApp } from '../context/AppContext';
 import { saveImagePermanently } from '../services/imageStorage';
@@ -34,6 +34,7 @@ export default function LearningContentScreen() {
 
     // Session states
     const [sessionId, setSessionId] = useState<string | null>(null);
+    const [sceneContext, setSceneContext] = useState<SceneContext | null>(null);
     const [hasMoreObjects, setHasMoreObjects] = useState(false);
     const [remainingCount, setRemainingCount] = useState(0);
     const [isLoadingSession, setIsLoadingSession] = useState(true);
@@ -106,9 +107,9 @@ export default function LearningContentScreen() {
         cropImage();
     }, [imageUri, route.params?.boundingBox, result.objectName]);
 
-    // Check if there are more objects to explore in this session + handle batch mode
+    // Load session and scene context + handle batch mode
     useEffect(() => {
-        const checkSession = async () => {
+        const loadSession = async () => {
             const sid = route.params?.sessionId;
 
             // Initialize batch mode if parameters exist
@@ -125,7 +126,9 @@ export default function LearningContentScreen() {
                 try {
                     const session = await sessionManager.getSession(sid);
                     if (session) {
+                        // ✅ FIXED: Load scene context
                         if (session.context) {
+                            setSceneContext(session.context);
                             console.log(`✓ Loaded scene context: ${session.context.location}`);
                         }
                         setExploredObjectIds(session.exploredObjectIds || []);
@@ -149,7 +152,7 @@ export default function LearningContentScreen() {
             setIsLoadingSession(false);
         };
 
-        checkSession();
+        loadSession();
     }, [route.params?.sessionId, route.params?.batchQueue, route.params?.currentBatchIndex]);
 
     // Auto-mark as explored when user views content (independent of saving)
@@ -316,7 +319,7 @@ export default function LearningContentScreen() {
                 nextObject.name,
                 nextObject.boundingBox,
                 user.gradeLevel,
-                sceneContext
+                sceneContext || undefined
             );
 
             if ('error' in result) {

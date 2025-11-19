@@ -14,7 +14,7 @@ import {
 import { RouteProp, useRoute, useNavigation, useIsFocused } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList, DetectedObject } from '../navigation/types';
+import { RootStackParamList, DetectedObject, SceneContext } from '../navigation/types';
 import { colors, fonts } from '../theme/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { analyzeSelectedObject } from '../services/gemini';
@@ -37,7 +37,7 @@ export default function DiscoverySessionScreen() {
 
     // Session state
     const [sessionId, setSessionId] = useState<string | undefined>(undefined);
-    const [sceneContext, setSceneContext] = useState<any>(null);
+    const [sceneContext, setSceneContext] = useState<SceneContext | null>(null);
     const [exploredObjectIds, setExploredObjectIds] = useState<string[]>([]);
 
     // Multi-select state
@@ -119,7 +119,7 @@ export default function DiscoverySessionScreen() {
                 object.name,
                 object.boundingBox,
                 user.gradeLevel,
-                sceneContext
+                sceneContext || undefined
             );
 
             if ('error' in result) {
@@ -193,7 +193,7 @@ export default function DiscoverySessionScreen() {
                 objectsQueue[0].name,
                 objectsQueue[0].boundingBox,
                 user.gradeLevel,
-                sceneContext
+                sceneContext || undefined
             );
 
             if ('error' in result) {
