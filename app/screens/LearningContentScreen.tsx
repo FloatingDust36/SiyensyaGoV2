@@ -34,7 +34,7 @@ export default function LearningContentScreen() {
 
     // Session states
     const [sessionId, setSessionId] = useState<string | null>(null);
-    const [sceneContext, setSceneContext] = useState<SceneContext | null>(null);
+    const [sceneContext, setSceneContext] = useState<SceneContext | null>(null); // ✅ FIXED
     const [hasMoreObjects, setHasMoreObjects] = useState(false);
     const [remainingCount, setRemainingCount] = useState(0);
     const [isLoadingSession, setIsLoadingSession] = useState(true);
@@ -246,29 +246,13 @@ export default function LearningContentScreen() {
     };
 
     const handleBackToSession = async () => {
-        // If in batch mode, navigate to next object
+        // ✅ FIXED: Improved batch mode logic
         if (isInBatchMode && batchQueue.length > 0) {
             const nextIndex = currentBatchIndex + 1;
 
             if (nextIndex < batchQueue.length) {
-                // More objects in batch queue
-                const nextObject = batchQueue[nextIndex];
-
-                Alert.alert(
-                    'Next Object',
-                    `Learning about: ${nextObject.name}\n\nObject ${nextIndex + 1} of ${batchQueue.length}`,
-                    [
-                        {
-                            text: 'Continue',
-                            onPress: () => navigateToNextBatchObject(nextIndex)
-                        },
-                        {
-                            text: 'Exit Batch',
-                            style: 'cancel',
-                            onPress: () => exitBatchMode()
-                        }
-                    ]
-                );
+                // Auto-navigate to next object without confirmation
+                await navigateToNextBatchObject(nextIndex);
             } else {
                 // Batch complete!
                 Alert.alert(
@@ -319,7 +303,7 @@ export default function LearningContentScreen() {
                 nextObject.name,
                 nextObject.boundingBox,
                 user.gradeLevel,
-                sceneContext || undefined
+                sceneContext ?? undefined
             );
 
             if ('error' in result) {
@@ -635,11 +619,11 @@ export default function LearningContentScreen() {
             <SafeAreaView style={styles.bottomNav} edges={['bottom']}>
                 {currentSection === SECTIONS.length - 1 ? (
                     <View style={styles.finalButtons}>
-                        {/* If part of session, show back to session button */}
+                        {/* ✅ IMPROVED: Equal-width buttons with better spacing */}
                         {sessionId && !isFromMuseum ? (
                             <>
                                 <TouchableOpacity
-                                    style={[styles.secondaryButton, { maxWidth: 120 }]}
+                                    style={styles.secondaryButtonEqual}
                                     onPress={handleScanAnother}
                                 >
                                     <Ionicons name="camera-outline" size={18} color={colors.primary} />
@@ -647,23 +631,32 @@ export default function LearningContentScreen() {
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                    style={[styles.primaryButton, { flex: 1 }]}
+                                    style={styles.primaryButtonEqual}
                                     onPress={handleBackToSession}
                                 >
-                                    <Ionicons name="arrow-back" size={18} color={colors.background} />
-                                    <Text style={styles.primaryButtonText}>
-                                        Back to Session
-                                    </Text>
+                                    {isInBatchMode ? (
+                                        <>
+                                            <Text style={styles.primaryButtonText}>
+                                                {currentBatchIndex + 1 < batchQueue.length ? 'Next Object' : 'Complete Batch'}
+                                            </Text>
+                                            <Ionicons name="arrow-forward" size={18} color={colors.background} />
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Ionicons name="arrow-back" size={18} color={colors.background} />
+                                            <Text style={styles.primaryButtonText}>Back to Session</Text>
+                                        </>
+                                    )}
                                 </TouchableOpacity>
                             </>
                         ) : (
                             <>
-                                <TouchableOpacity style={styles.secondaryButton} onPress={handleScanAnother}>
+                                <TouchableOpacity style={styles.secondaryButtonEqual} onPress={handleScanAnother}>
                                     <Ionicons name="camera-outline" size={18} color={colors.primary} />
                                     <Text style={styles.secondaryButtonText}>Scan Again</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity
-                                    style={[styles.primaryButton, isFromMuseum && styles.deleteButton]}
+                                    style={[styles.primaryButtonEqual, isFromMuseum && styles.deleteButton]}
                                     onPress={handleAddToMuseum}
                                 >
                                     <Ionicons
@@ -1009,6 +1002,32 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: 12,
         paddingBottom: 10,
+    },
+    secondaryButtonEqual: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 16,
+        borderRadius: 25,
+        borderWidth: 2,
+        borderColor: colors.primary,
+    },
+    primaryButtonEqual: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 16,
+        borderRadius: 25,
+        backgroundColor: colors.primary,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 5,
     },
     secondaryButton: {
         flex: 1,

@@ -119,7 +119,7 @@ export default function DiscoverySessionScreen() {
                 object.name,
                 object.boundingBox,
                 user.gradeLevel,
-                sceneContext || undefined
+                sceneContext ?? undefined  // ✅ FIXED: Convert null to undefined
             );
 
             if ('error' in result) {
@@ -193,7 +193,7 @@ export default function DiscoverySessionScreen() {
                 objectsQueue[0].name,
                 objectsQueue[0].boundingBox,
                 user.gradeLevel,
-                sceneContext || undefined
+                sceneContext ?? undefined  // ✅ FIXED: Convert null to undefined
             );
 
             if ('error' in result) {
