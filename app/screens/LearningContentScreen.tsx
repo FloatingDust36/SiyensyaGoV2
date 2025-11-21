@@ -34,7 +34,7 @@ export default function LearningContentScreen() {
 
     // Session states
     const [sessionId, setSessionId] = useState<string | null>(null);
-    const [sceneContext, setSceneContext] = useState<SceneContext | null>(null); // ✅ FIXED
+    const [sceneContext, setSceneContext] = useState<SceneContext | null>(null);
     const [hasMoreObjects, setHasMoreObjects] = useState(false);
     const [remainingCount, setRemainingCount] = useState(0);
     const [isLoadingSession, setIsLoadingSession] = useState(true);
@@ -44,7 +44,7 @@ export default function LearningContentScreen() {
     const [croppedImageUri, setCroppedImageUri] = useState<string | null>(null);
     const [isLoadingCrop, setIsLoadingCrop] = useState(false);
 
-    const { addDiscovery, removeDiscovery } = useApp();
+    const { addDiscovery, removeDiscovery, user } = useApp();
     const [isSaved, setIsSaved] = useState(false);
     const [isFromMuseum, setIsFromMuseum] = useState(false);
 
@@ -52,6 +52,7 @@ export default function LearningContentScreen() {
     const [batchQueue, setBatchQueue] = useState<DetectedObject[]>([]);
     const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
     const [isInBatchMode, setIsInBatchMode] = useState(false);
+    const [isLoadingNextObject, setIsLoadingNextObject] = useState(false);
 
     const imageUri = route.params?.imageUri || '';
     const result = route.params?.result || {
@@ -126,7 +127,6 @@ export default function LearningContentScreen() {
                 try {
                     const session = await sessionManager.getSession(sid);
                     if (session) {
-                        // ✅ FIXED: Load scene context
                         if (session.context) {
                             setSceneContext(session.context);
                             console.log(`✓ Loaded scene context: ${session.context.location}`);
@@ -163,13 +163,11 @@ export default function LearningContentScreen() {
 
             if (sid && objId) {
                 try {
-                    // Check if already explored
                     const session = await sessionManager.getSession(sid);
                     if (session && !session.exploredObjectIds.includes(objId)) {
                         await sessionManager.markObjectAsExplored(sid, objId);
                         console.log(`✓ Auto-marked ${result.objectName} as explored`);
 
-                        // Refresh session state
                         const updatedSession = await sessionManager.getSession(sid);
                         if (updatedSession) {
                             const hasMore = updatedSession.exploredObjectIds.length < updatedSession.detectedObjects.length;
@@ -190,7 +188,6 @@ export default function LearningContentScreen() {
             }
         };
 
-        // Mark as explored after a short delay (ensures user actually viewed content)
         const timer = setTimeout(markAsExplored, 1000);
         return () => clearTimeout(timer);
     }, [route.params?.sessionId, route.params?.objectId, result.objectName]);
@@ -246,12 +243,11 @@ export default function LearningContentScreen() {
     };
 
     const handleBackToSession = async () => {
-        // ✅ FIXED: Improved batch mode logic
         if (isInBatchMode && batchQueue.length > 0) {
             const nextIndex = currentBatchIndex + 1;
 
             if (nextIndex < batchQueue.length) {
-                // Auto-navigate to next object without confirmation
+                // Auto-navigate to next object
                 await navigateToNextBatchObject(nextIndex);
             } else {
                 // Batch complete!
@@ -267,21 +263,17 @@ export default function LearningContentScreen() {
                 );
             }
         } else if (sessionId) {
-            // Regular session mode
             const session = await sessionManager.getSession(sessionId);
             if (session) {
-                // Check if all objects explored
                 const allExplored = session.exploredObjectIds.length >= session.detectedObjects.length;
 
                 if (allExplored) {
-                    // Navigate to summary
                     navigation.replace('SessionSummary', {
                         sessionId,
                         exploredCount: session.exploredObjectIds.length,
                         totalCount: session.detectedObjects.length
                     });
                 } else {
-                    // Navigate back to object selection
                     navigation.navigate('ObjectSelection', {
                         sessionId: sessionId,
                         imageUri: session.fullImageUri,
@@ -294,10 +286,12 @@ export default function LearningContentScreen() {
 
     const navigateToNextBatchObject = async (nextIndex: number) => {
         const nextObject = batchQueue[nextIndex];
-        const { user } = useApp();
+
+        setIsLoadingNextObject(true);
 
         try {
-            // Analyze next object
+            console.log(`🔄 Loading next object: ${nextObject.name} (${nextIndex + 1}/${batchQueue.length})`);
+
             const result = await analyzeSelectedObject(
                 imageUri,
                 nextObject.name,
@@ -308,6 +302,7 @@ export default function LearningContentScreen() {
 
             if ('error' in result) {
                 Alert.alert('Analysis Error', result.error);
+                setIsLoadingNextObject(false);
                 return;
             }
 
@@ -336,6 +331,8 @@ export default function LearningContentScreen() {
             console.error('Error analyzing next object:', error);
             Alert.alert('Error', 'Failed to analyze next object. Returning to session.');
             exitBatchMode();
+        } finally {
+            setIsLoadingNextObject(false);
         }
     };
 
@@ -407,7 +404,6 @@ export default function LearningContentScreen() {
 
             setIsSaved(true);
 
-            // Refresh session state (object already marked as explored in useEffect)
             if (sessionId) {
                 try {
                     const updatedSession = await sessionManager.getSession(sessionId);
@@ -427,7 +423,6 @@ export default function LearningContentScreen() {
                 }
             }
 
-            // Show success message
             Alert.alert(
                 'Saved!',
                 `"${result.objectName}" has been added to your Museum!`,
@@ -619,7 +614,6 @@ export default function LearningContentScreen() {
             <SafeAreaView style={styles.bottomNav} edges={['bottom']}>
                 {currentSection === SECTIONS.length - 1 ? (
                     <View style={styles.finalButtons}>
-                        {/* ✅ IMPROVED: Equal-width buttons with better spacing */}
                         {sessionId && !isFromMuseum ? (
                             <>
                                 <TouchableOpacity
@@ -631,10 +625,13 @@ export default function LearningContentScreen() {
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                    style={styles.primaryButtonEqual}
+                                    style={[styles.primaryButtonEqual, isLoadingNextObject && { opacity: 0.6 }]}
                                     onPress={handleBackToSession}
+                                    disabled={isLoadingNextObject}
                                 >
-                                    {isInBatchMode ? (
+                                    {isLoadingNextObject ? (
+                                        <ActivityIndicator size="small" color={colors.background} />
+                                    ) : isInBatchMode ? (
                                         <>
                                             <Text style={styles.primaryButtonText}>
                                                 {currentBatchIndex + 1 < batchQueue.length ? 'Next Object' : 'Complete Batch'}
@@ -1029,40 +1026,10 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 5,
     },
-    secondaryButton: {
-        flex: 1,
-        maxWidth: '48%',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        paddingVertical: 16,
-        paddingHorizontal: 8,
-        borderRadius: 25,
-        borderWidth: 2,
-        borderColor: colors.primary,
-    },
     secondaryButtonText: {
         fontFamily: fonts.heading,
         color: colors.primary,
         fontSize: 12,
-    },
-    primaryButton: {
-        flex: 1,
-        maxWidth: '48%',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        paddingVertical: 16,
-        paddingHorizontal: 8,
-        borderRadius: 25,
-        backgroundColor: colors.primary,
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 5,
     },
     primaryButtonText: {
         fontFamily: fonts.heading,

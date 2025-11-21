@@ -43,11 +43,6 @@ export default function DiscoverySessionScreen() {
     // Multi-select state
     const [selectedObjects, setSelectedObjects] = useState<Set<string>>(new Set());
     const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [currentlyAnalyzing, setCurrentlyAnalyzing] = useState<string | null>(null);
-
-    // Batch learning state
-    const [batchQueue, setBatchQueue] = useState<DetectedObject[]>([]);
-    const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
 
     // Image layout for bounding box positioning
     const [imageLayout, setImageLayout] = useState({ width: 0, height: 0 });
@@ -106,59 +101,9 @@ export default function DiscoverySessionScreen() {
     };
 
     /**
-     * Quick learn - single object immediate learning
+     * UNIFIED LEARNING HANDLER - Works for both single and batch
      */
-    const handleQuickLearn = async (object: DetectedObject) => {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        setIsAnalyzing(true);
-        setCurrentlyAnalyzing(object.id);
-
-        try {
-            const result = await analyzeSelectedObject(
-                imageUri,
-                object.name,
-                object.boundingBox,
-                user.gradeLevel,
-                sceneContext ?? undefined  // ✅ FIXED: Convert null to undefined
-            );
-
-            if ('error' in result) {
-                Alert.alert('Analysis Error', result.error);
-                setIsAnalyzing(false);
-                setCurrentlyAnalyzing(null);
-                return;
-            }
-
-            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-            // Navigate to learning content with session info
-            navigation.navigate('LearningContent', {
-                sessionId: sessionId || undefined,
-                objectId: object.id,
-                imageUri,
-                boundingBox: object.boundingBox,
-                result: {
-                    objectName: String(result.objectName || object.name),
-                    confidence: Number(result.confidence || object.confidence),
-                    category: String(result.category || 'General'),
-                    funFact: String(result.funFact || ''),
-                    the_science_in_action: String(result.the_science_in_action || ''),
-                    why_it_matters_to_you: String(result.why_it_matters_to_you || ''),
-                    tryThis: String(result.tryThis || ''),
-                    explore_further: String(result.explore_further || '')
-                }
-            });
-        } catch (error) {
-            console.error('Error analyzing object:', error);
-            Alert.alert('Error', 'Failed to analyze object. Please try again.');
-        } finally {
-            setIsAnalyzing(false);
-            setCurrentlyAnalyzing(null);
-        }
-    };
-
-    // Batch learning - analyze multiple selected objects sequentially
-    const handleBatchLearn = async () => {
+    const handleLearnSelected = async () => {
         if (selectedObjects.size === 0) {
             Alert.alert('No Objects Selected', 'Please select at least one object to learn about.');
             return;
@@ -169,22 +114,33 @@ export default function DiscoverySessionScreen() {
             .map(id => detectedObjects.find(obj => obj.id === id))
             .filter(obj => obj !== undefined) as DetectedObject[];
 
+        // Updated message for both single and batch
+        const messageTitle = selectedObjectsArray.length === 1
+            ? 'Start Learning'
+            : 'Batch Learning';
+
+        const messageBody = selectedObjectsArray.length === 1
+            ? `Ready to explore "${selectedObjectsArray[0].name}"?`
+            : `You selected ${selectedObjectsArray.length} objects. We'll learn about them one by one!\n\n✨ Auto-navigation enabled - you'll automatically move to the next object after finishing each one.`;
+
         Alert.alert(
-            'Batch Learning',
-            `You selected ${selectedObjectsArray.length} objects. We'll learn about them one by one!\n\n✨ Auto-navigation enabled - you'll automatically move to the next object after finishing each one.`,
+            messageTitle,
+            messageBody,
             [
                 {
-                    text: 'Start Learning',
-                    onPress: () => startBatchLearning(selectedObjectsArray)
+                    text: 'Start',
+                    onPress: () => startLearning(selectedObjectsArray)
                 },
                 { text: 'Cancel', style: 'cancel' }
             ]
         );
     };
 
-    const startBatchLearning = async (objectsQueue: DetectedObject[]) => {
+    /**
+     * Start learning flow (handles both single and batch)
+     */
+    const startLearning = async (objectsQueue: DetectedObject[]) => {
         setIsAnalyzing(true);
-        setCurrentlyAnalyzing(objectsQueue[0].id);
 
         try {
             // Analyze first object
@@ -193,19 +149,18 @@ export default function DiscoverySessionScreen() {
                 objectsQueue[0].name,
                 objectsQueue[0].boundingBox,
                 user.gradeLevel,
-                sceneContext ?? undefined  // ✅ FIXED: Convert null to undefined
+                sceneContext ?? undefined
             );
 
             if ('error' in result) {
                 Alert.alert('Analysis Error', result.error);
                 setIsAnalyzing(false);
-                setCurrentlyAnalyzing(null);
                 return;
             }
 
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-            // Navigate to learning content with batch queue
+            // Navigate to learning content with batch queue (if more than 1)
             navigation.navigate('LearningContent', {
                 sessionId: sessionId || undefined,
                 objectId: objectsQueue[0].id,
@@ -221,18 +176,20 @@ export default function DiscoverySessionScreen() {
                     tryThis: String(result.tryThis || ''),
                     explore_further: String(result.explore_further || '')
                 },
-                batchQueue: objectsQueue,
-                currentBatchIndex: 0
+                // Only include batch parameters if more than 1 object
+                ...(objectsQueue.length > 1 && {
+                    batchQueue: objectsQueue,
+                    currentBatchIndex: 0
+                })
             });
 
-            // Clear selections after starting batch
+            // Clear selections after starting
             setSelectedObjects(new Set());
         } catch (error) {
-            console.error('Error starting batch learning:', error);
-            Alert.alert('Error', 'Failed to start batch learning. Please try again.');
+            console.error('Error starting learning:', error);
+            Alert.alert('Error', 'Failed to start learning. Please try again.');
         } finally {
             setIsAnalyzing(false);
-            setCurrentlyAnalyzing(null);
         }
     };
 
@@ -344,7 +301,7 @@ export default function DiscoverySessionScreen() {
                     <Text style={styles.sectionTitle}>Detected Objects</Text>
                     {unexploredObjects.length > 0 && (
                         <Text style={styles.sectionSubtitle}>
-                            Tap to learn immediately, or select multiple for batch learning
+                            Select objects to learn about (tap checkboxes)
                         </Text>
                     )}
 
@@ -396,29 +353,26 @@ export default function DiscoverySessionScreen() {
                         unexploredObjects.map((object) => {
                             const isSelected = selectedObjects.has(object.id);
                             const confidenceColor = getConfidenceColor(object.confidence);
-                            const isAnalyzingThis = currentlyAnalyzing === object.id;
 
                             return (
-                                <View
+                                <TouchableOpacity
                                     key={object.id}
                                     style={[
                                         styles.objectCard,
-                                        isSelected && styles.objectCardSelected,
-                                        isAnalyzingThis && styles.objectCardAnalyzing
+                                        isSelected && styles.objectCardSelected
                                     ]}
+                                    onPress={() => toggleObjectSelection(object.id)}
+                                    disabled={isAnalyzing}
+                                    activeOpacity={0.7}
                                 >
-                                    {/* Checkbox for multi-select */}
-                                    <TouchableOpacity
-                                        style={styles.checkboxContainer}
-                                        onPress={() => toggleObjectSelection(object.id)}
-                                        disabled={isAnalyzing}
-                                    >
+                                    {/* Checkbox for selection */}
+                                    <View style={styles.checkboxContainer}>
                                         {isSelected ? (
                                             <Ionicons name="checkbox" size={24} color={colors.secondary} />
                                         ) : (
                                             <Ionicons name="square-outline" size={24} color={colors.lightGray} />
                                         )}
-                                    </TouchableOpacity>
+                                    </View>
 
                                     {/* Object Info */}
                                     <View style={styles.objectInfo}>
@@ -440,22 +394,13 @@ export default function DiscoverySessionScreen() {
                                         </View>
                                     </View>
 
-                                    {/* Quick Learn Button */}
-                                    <TouchableOpacity
-                                        style={[styles.learnButton, { backgroundColor: confidenceColor }]}
-                                        onPress={() => handleQuickLearn(object)}
-                                        disabled={isAnalyzing}
-                                    >
-                                        {isAnalyzingThis ? (
-                                            <ActivityIndicator size="small" color={colors.background} />
-                                        ) : (
-                                            <>
-                                                <Text style={styles.learnButtonText}>Learn</Text>
-                                                <Ionicons name="arrow-forward" size={16} color={colors.background} />
-                                            </>
-                                        )}
-                                    </TouchableOpacity>
-                                </View>
+                                    {/* Selection indicator on the right */}
+                                    {isSelected && (
+                                        <View style={styles.selectionIndicator}>
+                                            <Ionicons name="checkmark-circle" size={20} color={colors.secondary} />
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
                             );
                         })
                     )}
@@ -495,21 +440,27 @@ export default function DiscoverySessionScreen() {
                 <View style={{ height: 100 }} />
             </ScrollView>
 
-            {/* Bottom Action Bar */}
+            {/* Bottom Action Bar - UNIFIED BUTTON */}
             {selectedObjects.size > 0 && (
                 <View style={styles.bottomBar}>
                     <Text style={styles.selectedCount}>
                         {selectedObjects.size} {selectedObjects.size === 1 ? 'object' : 'objects'} selected
                     </Text>
                     <TouchableOpacity
-                        style={styles.batchLearnButton}
-                        onPress={handleBatchLearn}
+                        style={[styles.learnSelectedButton, isAnalyzing && styles.learnSelectedButtonDisabled]}
+                        onPress={handleLearnSelected}
                         disabled={isAnalyzing}
                     >
-                        <Ionicons name="layers" size={20} color={colors.background} />
-                        <Text style={styles.batchLearnText}>
-                            Learn Selected
-                        </Text>
+                        {isAnalyzing ? (
+                            <ActivityIndicator size="small" color={colors.background} />
+                        ) : (
+                            <>
+                                <Ionicons name="school" size={20} color={colors.background} />
+                                <Text style={styles.learnSelectedText}>
+                                    Learn Selected
+                                </Text>
+                            </>
+                        )}
                     </TouchableOpacity>
                 </View>
             )}
@@ -653,9 +604,6 @@ const styles = StyleSheet.create({
         borderColor: colors.secondary,
         backgroundColor: 'rgba(138, 43, 226, 0.1)',
     },
-    objectCardAnalyzing: {
-        opacity: 0.6,
-    },
     checkboxContainer: {
         marginRight: 12,
     },
@@ -683,18 +631,8 @@ const styles = StyleSheet.create({
         fontFamily: fonts.heading,
         fontSize: 11,
     },
-    learnButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 20,
-    },
-    learnButtonText: {
-        fontFamily: fonts.heading,
-        fontSize: 13,
-        color: colors.background,
+    selectionIndicator: {
+        marginLeft: 8,
     },
     emptyState: {
         alignItems: 'center',
@@ -808,7 +746,7 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: colors.text,
     },
-    batchLearnButton: {
+    learnSelectedButton: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
@@ -816,8 +754,13 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingVertical: 12,
         borderRadius: 25,
+        minWidth: 160,
+        justifyContent: 'center',
     },
-    batchLearnText: {
+    learnSelectedButtonDisabled: {
+        opacity: 0.6,
+    },
+    learnSelectedText: {
         fontFamily: fonts.heading,
         fontSize: 14,
         color: colors.background,
