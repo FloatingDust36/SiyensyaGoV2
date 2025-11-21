@@ -27,6 +27,37 @@ type NavigationProp = StackNavigationProp<RootStackParamList>;
 
 const { width } = Dimensions.get('window');
 
+// Helper function to calculate actual image dimensions within the container
+function calculateActualImageLayout(
+    containerWidth: number,
+    containerHeight: number,
+    imageWidth: number,
+    imageHeight: number
+): { actualWidth: number; actualHeight: number; offsetX: number; offsetY: number } {
+
+    const containerAspect = containerWidth / containerHeight;
+    const imageAspect = imageWidth / imageHeight;
+
+    let actualWidth: number;
+    let actualHeight: number;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (imageAspect > containerAspect) {
+        // Image is wider - fits to width, letterbox top/bottom
+        actualWidth = containerWidth;
+        actualHeight = containerWidth / imageAspect;
+        offsetY = (containerHeight - actualHeight) / 2;
+    } else {
+        // Image is taller - fits to height, letterbox left/right
+        actualHeight = containerHeight;
+        actualWidth = containerHeight * imageAspect;
+        offsetX = (containerWidth - actualWidth) / 2;
+    }
+
+    return { actualWidth, actualHeight, offsetX, offsetY };
+}
+
 export default function DiscoverySessionScreen() {
     const route = useRoute<DiscoverySessionRouteProp>();
     const navigation = useNavigation<NavigationProp>();
@@ -45,7 +76,22 @@ export default function DiscoverySessionScreen() {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
 
     // Image layout for bounding box positioning
-    const [imageLayout, setImageLayout] = useState({ width: 0, height: 0 });
+    const [imageContainerLayout, setImageContainerLayout] = useState({ width: 0, height: 0 });
+    const [originalImageSize, setOriginalImageSize] = useState({ width: 0, height: 0 });
+
+    // Load original image dimensions
+    React.useEffect(() => {
+        Image.getSize(
+            imageUri,
+            (width, height) => {
+                console.log(`📐 Original image size: ${width}x${height}`);
+                setOriginalImageSize({ width, height });
+            },
+            (error) => {
+                console.error('Error getting image size:', error);
+            }
+        );
+    }, [imageUri]);
 
     // Load session and scene context
     React.useEffect(() => {
@@ -80,7 +126,22 @@ export default function DiscoverySessionScreen() {
 
     const handleImageLayout = (event: any) => {
         const { width, height } = event.nativeEvent.layout;
-        setImageLayout({ width, height });
+        setImageContainerLayout({ width, height });
+        console.log(`📐 Image container display size: ${width}x${height}`);
+    };
+
+    // Calculate actual visible image dimensions and offsets
+    const getActualImageLayout = () => {
+        if (imageContainerLayout.width === 0 || originalImageSize.width === 0) {
+            return null;
+        }
+
+        return calculateActualImageLayout(
+            imageContainerLayout.width,
+            imageContainerLayout.height,
+            originalImageSize.width,
+            originalImageSize.height
+        );
     };
 
     /**
@@ -109,12 +170,10 @@ export default function DiscoverySessionScreen() {
             return;
         }
 
-        // Create queue from selected objects
         const selectedObjectsArray = Array.from(selectedObjects)
             .map(id => detectedObjects.find(obj => obj.id === id))
             .filter(obj => obj !== undefined) as DetectedObject[];
 
-        // Updated message for both single and batch
         const messageTitle = selectedObjectsArray.length === 1
             ? 'Start Learning'
             : 'Batch Learning';
@@ -143,7 +202,6 @@ export default function DiscoverySessionScreen() {
         setIsAnalyzing(true);
 
         try {
-            // Analyze first object
             const result = await analyzeSelectedObject(
                 imageUri,
                 objectsQueue[0].name,
@@ -160,7 +218,6 @@ export default function DiscoverySessionScreen() {
 
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-            // Navigate to learning content with batch queue (if more than 1)
             navigation.navigate('LearningContent', {
                 sessionId: sessionId || undefined,
                 objectId: objectsQueue[0].id,
@@ -176,14 +233,12 @@ export default function DiscoverySessionScreen() {
                     tryThis: String(result.tryThis || ''),
                     explore_further: String(result.explore_further || '')
                 },
-                // Only include batch parameters if more than 1 object
                 ...(objectsQueue.length > 1 && {
                     batchQueue: objectsQueue,
                     currentBatchIndex: 0
                 })
             });
 
-            // Clear selections after starting
             setSelectedObjects(new Set());
         } catch (error) {
             console.error('Error starting learning:', error);
@@ -193,9 +248,6 @@ export default function DiscoverySessionScreen() {
         }
     };
 
-    /**
-     * Handle "Not finding what you want?" fallback
-     */
     const handleFallbackOptions = () => {
         Alert.alert(
             'Not finding what you want?',
@@ -222,9 +274,6 @@ export default function DiscoverySessionScreen() {
         );
     };
 
-    /**
-     * Get confidence color coding
-     */
     const getConfidenceColor = (confidence: number): string => {
         if (confidence >= 85) return colors.success;
         if (confidence >= 70) return colors.primary;
@@ -235,9 +284,11 @@ export default function DiscoverySessionScreen() {
         navigation.navigate('MainTabs', { screen: 'Camera' });
     };
 
-    // Filter unexplored objects
     const unexploredObjects = detectedObjects.filter(obj => !exploredObjectIds.includes(obj.id));
     const exploredObjects = detectedObjects.filter(obj => exploredObjectIds.includes(obj.id));
+
+    // Calculate actual image layout for bounding boxes
+    const actualImageLayout = getActualImageLayout();
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
@@ -286,7 +337,7 @@ export default function DiscoverySessionScreen() {
                     </View>
                 )}
 
-                {/* Image Preview */}
+                {/* Image Preview with Bounding Boxes */}
                 <View style={styles.imageSection}>
                     <Image
                         source={{ uri: imageUri }}
@@ -294,6 +345,61 @@ export default function DiscoverySessionScreen() {
                         resizeMode="contain"
                         onLayout={handleImageLayout}
                     />
+
+                    {/* Render bounding boxes for SELECTED objects only */}
+                    {actualImageLayout && unexploredObjects.map((object) => {
+                        const isSelected = selectedObjects.has(object.id);
+
+                        if (!isSelected) return null;
+
+                        // Calculate bounding box position on the ACTUAL visible image
+                        const boxLeft = actualImageLayout.offsetX + (object.boundingBox.x / 100) * actualImageLayout.actualWidth;
+                        const boxTop = actualImageLayout.offsetY + (object.boundingBox.y / 100) * actualImageLayout.actualHeight;
+                        const boxWidth = (object.boundingBox.width / 100) * actualImageLayout.actualWidth;
+                        const boxHeight = (object.boundingBox.height / 100) * actualImageLayout.actualHeight;
+
+                        console.log(`📦 Bounding box for ${object.name}:`, {
+                            container: imageContainerLayout,
+                            actualImage: actualImageLayout,
+                            percentages: object.boundingBox,
+                            calculated: { boxLeft, boxTop, boxWidth, boxHeight }
+                        });
+
+                        const confidenceColor = getConfidenceColor(object.confidence);
+
+                        return (
+                            <View
+                                key={`bbox-${object.id}`}
+                                style={[
+                                    styles.boundingBox,
+                                    {
+                                        left: boxLeft,
+                                        top: boxTop,
+                                        width: boxWidth,
+                                        height: boxHeight,
+                                        borderColor: confidenceColor,
+                                    }
+                                ]}
+                            >
+                                <View
+                                    style={[
+                                        styles.boundingBoxLabel,
+                                        { backgroundColor: confidenceColor },
+                                        boxTop < 30 ? { top: 2 } : { top: -26 }
+                                    ]}
+                                >
+                                    <Text style={styles.boundingBoxLabelText} numberOfLines={1}>
+                                        {object.name}
+                                    </Text>
+                                </View>
+
+                                <View style={[styles.corner, styles.topLeft, { borderColor: confidenceColor }]} />
+                                <View style={[styles.corner, styles.topRight, { borderColor: confidenceColor }]} />
+                                <View style={[styles.corner, styles.bottomLeft, { borderColor: confidenceColor }]} />
+                                <View style={[styles.corner, styles.bottomRight, { borderColor: confidenceColor }]} />
+                            </View>
+                        );
+                    })}
                 </View>
 
                 {/* Object List */}
@@ -301,12 +407,11 @@ export default function DiscoverySessionScreen() {
                     <Text style={styles.sectionTitle}>Detected Objects</Text>
                     {unexploredObjects.length > 0 && (
                         <Text style={styles.sectionSubtitle}>
-                            Select objects to learn about (tap checkboxes)
+                            Select objects to learn about (tap to see bounding box)
                         </Text>
                     )}
 
                     {unexploredObjects.length === 0 && exploredObjects.length > 0 ? (
-                        // Empty state - all objects explored (SUCCESS!)
                         <View style={styles.emptyState}>
                             <Ionicons name="checkmark-done-circle" size={80} color={colors.success} />
                             <Text style={styles.emptyStateTitle}>All Objects Explored!</Text>
@@ -333,7 +438,6 @@ export default function DiscoverySessionScreen() {
                             </TouchableOpacity>
                         </View>
                     ) : unexploredObjects.length === 0 ? (
-                        // True empty state - no objects detected at all (EDGE CASE)
                         <View style={styles.emptyState}>
                             <Ionicons name="search-outline" size={80} color={colors.lightGray} />
                             <Text style={styles.emptyStateTitle}>No Objects Detected</Text>
@@ -349,7 +453,6 @@ export default function DiscoverySessionScreen() {
                             </TouchableOpacity>
                         </View>
                     ) : (
-                        // Regular object list - show unexplored objects
                         unexploredObjects.map((object) => {
                             const isSelected = selectedObjects.has(object.id);
                             const confidenceColor = getConfidenceColor(object.confidence);
@@ -365,7 +468,6 @@ export default function DiscoverySessionScreen() {
                                     disabled={isAnalyzing}
                                     activeOpacity={0.7}
                                 >
-                                    {/* Checkbox for selection */}
                                     <View style={styles.checkboxContainer}>
                                         {isSelected ? (
                                             <Ionicons name="checkbox" size={24} color={colors.secondary} />
@@ -374,7 +476,6 @@ export default function DiscoverySessionScreen() {
                                         )}
                                     </View>
 
-                                    {/* Object Info */}
                                     <View style={styles.objectInfo}>
                                         <Text style={styles.objectName}>{object.name}</Text>
                                         <View style={styles.objectMeta}>
@@ -394,7 +495,6 @@ export default function DiscoverySessionScreen() {
                                         </View>
                                     </View>
 
-                                    {/* Selection indicator on the right */}
                                     {isSelected && (
                                         <View style={styles.selectionIndicator}>
                                             <Ionicons name="checkmark-circle" size={20} color={colors.secondary} />
@@ -440,7 +540,7 @@ export default function DiscoverySessionScreen() {
                 <View style={{ height: 100 }} />
             </ScrollView>
 
-            {/* Bottom Action Bar - UNIFIED BUTTON */}
+            {/* Bottom Action Bar */}
             {selectedObjects.size > 0 && (
                 <View style={styles.bottomBar}>
                     <Text style={styles.selectedCount}>
@@ -569,10 +669,63 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         aspectRatio: 4 / 3,
         backgroundColor: '#1A1C2A',
+        position: 'relative',
     },
     image: {
         width: '100%',
         height: '100%',
+    },
+    boundingBox: {
+        position: 'absolute',
+        borderWidth: 3,
+        borderRadius: 8,
+    },
+    boundingBoxLabel: {
+        position: 'absolute',
+        left: 0,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
+        maxWidth: 180,
+    },
+    boundingBoxLabelText: {
+        fontFamily: fonts.heading,
+        fontSize: 11,
+        color: colors.background,
+    },
+    corner: {
+        position: 'absolute',
+        width: 16,
+        height: 16,
+        borderWidth: 3,
+    },
+    topLeft: {
+        top: -3,
+        left: -3,
+        borderRightWidth: 0,
+        borderBottomWidth: 0,
+        borderTopLeftRadius: 8,
+    },
+    topRight: {
+        top: -3,
+        right: -3,
+        borderLeftWidth: 0,
+        borderBottomWidth: 0,
+        borderTopRightRadius: 8,
+    },
+    bottomLeft: {
+        bottom: -3,
+        left: -3,
+        borderRightWidth: 0,
+        borderTopWidth: 0,
+        borderBottomLeftRadius: 8,
+    },
+    bottomRight: {
+        bottom: -3,
+        right: -3,
+        borderLeftWidth: 0,
+        borderTopWidth: 0,
+        borderBottomRightRadius: 8,
     },
     objectListSection: {
         padding: 16,
