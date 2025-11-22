@@ -5,9 +5,9 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'react-native';
 
 const CROPS_DIR = `${FileSystem.documentDirectory}siyensyago_crops/`;
-const PADDING_PERCENTAGE = 0.10; // Increased to 10% padding for better coverage
-const MAX_CROP_WIDTH = 800;
-const JPEG_QUALITY = 0.8;
+const PADDING_PERCENTAGE = 0.05; // REDUCED from 0.10 to 0.05 (5% padding for tighter crops)
+const MAX_CROP_SIZE = 1200; // 🔧 NEW: Maximum dimension (width or height)
+const JPEG_QUALITY = 0.85; // 🔧 INCREASED from 0.8 for better quality
 
 // Ensure crop directory exists
 async function ensureCropDirectory(): Promise<void> {
@@ -35,7 +35,7 @@ function getImageDimensions(imageUri: string): Promise<{ width: number; height: 
     });
 }
 
-// Convert percentage-based bounding box to pixel coordinates
+// 🔧 FIXED: Convert percentage-based bounding box to pixel coordinates
 function calculateCropCoordinates(
     boundingBox: { x: number; y: number; width: number; height: number },
     imageWidth: number,
@@ -50,7 +50,7 @@ function calculateCropCoordinates(
     });
 
     // Step 1: Convert percentages to pixels
-    // IMPORTANT: x and y are TOP-LEFT corner coordinates (not center)
+    // ✅ ASSUMPTION: x,y are TOP-LEFT corner (as per Gemini prompt)
     const xPixel = (boundingBox.x / 100) * imageWidth;
     const yPixel = (boundingBox.y / 100) * imageHeight;
     const widthPixel = (boundingBox.width / 100) * imageWidth;
@@ -63,7 +63,7 @@ function calculateCropCoordinates(
         height: heightPixel
     });
 
-    // Step 2: Calculate padding (10% of object size)
+    // Step 2: Calculate padding (5% of object size) - REDUCED for tighter crops
     const paddingX = widthPixel * PADDING_PERCENTAGE;
     const paddingY = heightPixel * PADDING_PERCENTAGE;
 
@@ -104,7 +104,7 @@ function calculateCropCoordinates(
         height: Math.round(paddedHeight)
     };
 
-    console.log('📊 Step 5 - Final crop coordinates (rounded):', result);
+    console.log('📊 Step 4 - Final crop coordinates (rounded):', result);
 
     // Validate result
     if (result.originX < 0 || result.originY < 0 ||
@@ -119,7 +119,7 @@ function calculateCropCoordinates(
     return result;
 }
 
-// Crop image for a single object
+// 🔧 FIXED: Crop image for a single object - REMOVED DISTORTING RESIZE
 export async function cropImageForObject(
     imageUri: string,
     boundingBox: { x: number; y: number; width: number; height: number },
@@ -139,22 +139,36 @@ export async function cropImageForObject(
 
         console.log('✂️ Cropping with coordinates:', cropCoords);
 
+        // 🔧 FIXED: Single crop operation, smart resizing only if needed
+        const operations: any[] = [
+            {
+                crop: {
+                    originX: cropCoords.originX,
+                    originY: cropCoords.originY,
+                    width: cropCoords.width,
+                    height: cropCoords.height
+                }
+            }
+        ];
+
+        // 🔧 NEW: Only resize if crop is larger than MAX_CROP_SIZE
+        // AND maintain aspect ratio!
+        const maxDimension = Math.max(cropCoords.width, cropCoords.height);
+        if (maxDimension > MAX_CROP_SIZE) {
+            const scale = MAX_CROP_SIZE / maxDimension;
+            operations.push({
+                resize: {
+                    width: Math.round(cropCoords.width * scale),
+                    height: Math.round(cropCoords.height * scale)
+                }
+            });
+            console.log(`📐 Resizing to maintain aspect ratio: ${Math.round(cropCoords.width * scale)}x${Math.round(cropCoords.height * scale)}`);
+        }
+
         // Perform crop operation
         const croppedImage = await manipulateAsync(
             imageUri,
-            [
-                // Step 1: Crop to object
-                {
-                    crop: {
-                        originX: cropCoords.originX,
-                        originY: cropCoords.originY,
-                        width: cropCoords.width,
-                        height: cropCoords.height
-                    }
-                },
-                // Step 2: Resize if too large (for storage efficiency)
-                { resize: { width: Math.min(MAX_CROP_WIDTH, cropCoords.width) } }
-            ],
+            operations,
             {
                 compress: JPEG_QUALITY,
                 format: SaveFormat.JPEG
