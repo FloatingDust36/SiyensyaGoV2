@@ -2,6 +2,7 @@
   "expo": {
     "name": "SiyensyaGo",
     "slug": "SiyensyaGoV2",
+    "scheme": "siyensyago",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -46,7 +47,8 @@
         {
           "photosPermission": "Allow SiyensyaGo to access your photos to analyze images."
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {

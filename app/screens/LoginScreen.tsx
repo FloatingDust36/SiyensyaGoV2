@@ -1,10 +1,10 @@
 // In app/screens/LoginScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; 
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Animated, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts } from '../theme/theme';
-import { SupabaseAuth } from '../services/supabase';
+import { SupabaseAuth, supabase, SupabaseProfile } from '../services/supabase'; // IMPORTED supabase and SupabaseProfile
 
 export default function LoginScreen({ navigation }: any) {
     const [isSignUp, setIsSignUp] = useState(false);
@@ -14,6 +14,7 @@ export default function LoginScreen({ navigation }: any) {
     const [fullName, setFullName] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [loading, setLoading] = useState(false); // New loading state for buttons
 
     // Animation values
     const slideAnim = React.useRef(new Animated.Value(0)).current;
@@ -37,6 +38,37 @@ export default function LoginScreen({ navigation }: any) {
         ).start();
     }, []);
 
+    // AUTHENTICATION LISTENER: Handles navigation after successful OAuth or manual login/signup
+    useEffect(() => {
+        setLoading(true);
+        // This listener fires whenever the authentication state changes (e.g., after OAuth redirect)
+        const { data: authListener } = supabase.auth.onAuthStateChange(
+            async (event, session) => {
+                setLoading(false);
+                if (session) {
+                    // User is signed in. Check onboarding status.
+                    try {
+                        const profile = await SupabaseProfile.getProfile(session.user.id);
+                        if (profile.has_completed_onboarding) {
+                            navigation.replace('MainTabs', { screen: 'Camera' });
+                        } else {
+                            navigation.replace('GradeLevel');
+                        }
+                    } catch (error) {
+                        // User exists but no profile yet (e.g., new OAuth user)
+                        navigation.replace('GradeLevel');
+                    }
+                } else if (event === 'SIGNED_OUT') {
+                    // Do nothing, stay on login screen
+                }
+            }
+        );
+
+        return () => {
+            authListener.subscription.unsubscribe();
+        };
+    }, []); // Run only once on mount
+
     const glowColor = glowAnim.interpolate({
         inputRange: [0, 1],
         outputRange: ['rgba(0, 191, 255, 0.1)', 'rgba(0, 191, 255, 0.3)'],
@@ -57,81 +89,40 @@ export default function LoginScreen({ navigation }: any) {
         setFullName('');
     };
 
-    // Handle authentication
+    // Handle email/password authentication
     const handleAuth = async () => {
+        setLoading(true);
         if (isSignUp) {
-            // Sign up validation
-            if (!fullName || !email || !password || !confirmPassword) {
-                Alert.alert('Error', 'Please fill in all fields');
-                return;
-            }
+            // Sign up validation (omitted for brevity, assume validation is correct)
             if (password !== confirmPassword) {
                 Alert.alert('Error', 'Passwords do not match');
+                setLoading(false);
+                return;
+            }
+            if (!fullName || !email || !password || !confirmPassword) {
+                Alert.alert('Error', 'Please fill in all fields');
+                setLoading(false);
                 return;
             }
             if (password.length < 6) {
                 Alert.alert('Error', 'Password must be at least 6 characters');
+                setLoading(false);
                 return;
             }
 
             try {
                 const result = await SupabaseAuth.signUp(email, password, fullName);
 
-                // Supabase behavior:
-                // - Duplicate email: Returns user with confirmed_at set (already confirmed)
-                // - New email: Returns user with confirmed_at null (needs verification)
-                // - Failed: Returns no user
-
-                if (result.user) {
-                    // Check if this is actually a duplicate by checking confirmed_at
-                    if (result.user.confirmed_at && !result.session) {
-                        // User already exists and is confirmed, but no session (duplicate signup attempt)
-                        Alert.alert(
-                            'Account Already Exists',
-                            'This email is already registered. Would you like to sign in instead?',
-                            [
-                                {
-                                    text: 'Sign In',
-                                    onPress: () => {
-                                        setIsSignUp(false);
-                                        // Keep email, clear passwords
-                                        setPassword('');
-                                        setConfirmPassword('');
-                                        setFullName('');
-                                    }
-                                },
-                                { text: 'Cancel', style: 'cancel' }
-                            ]
-                        );
-                    } else if (!result.session) {
-                        // New user, needs verification
-                        Alert.alert(
-                            'Success!',
-                            'Account created! Please check your email to verify your account before signing in.',
-                            [
-                                {
-                                    text: 'OK',
-                                    onPress: () => {
-                                        setIsSignUp(false);
-                                        setEmail('');
-                                        setPassword('');
-                                        setConfirmPassword('');
-                                        setFullName('');
-                                    }
-                                }
-                            ]
-                        );
-                    } else {
-                        // Has session - email verification disabled
-                        Alert.alert(
-                            'Success!',
-                            'Account created successfully!',
-                            [{ text: 'OK', onPress: () => navigation.replace('GradeLevel') }]
-                        );
-                    }
-                } else {
-                    // No user returned - something went wrong
-                    Alert.alert('Error', 'Unable to create account. Please try again.');
+                if (result.user && !result.session) {
+                    // New user, needs email verification. Stay on screen, listener won't fire.
+                    Alert.alert(
+                        'Success!',
+                        'Account created! Please check your email to verify your account before signing in.'
+                    );
+                } else if (result.session) {
+                    // Session established (either confirmed or email verification disabled)
+                    // The useEffect listener handles navigation.
+                    Alert.alert('Success!', 'Signed up successfully!');
                 }
             } catch (error: any) {
                 console.error('Signup error:', error);
@@ -141,55 +132,40 @@ export default function LoginScreen({ navigation }: any) {
             // Sign in validation
             if (!email || !password) {
                 Alert.alert('Error', 'Please enter email and password');
+                setLoading(false);
                 return;
             }
 
             try {
                 await SupabaseAuth.signIn(email, password);
-
-                // Check if user has completed onboarding
-                const { SupabaseProfile } = require('../services/supabase');
-                const session = await SupabaseAuth.getSession();
-
-                if (session?.user) {
-                    try {
-                        const profile = await SupabaseProfile.getProfile(session.user.id);
-
-                        if (profile.has_completed_onboarding) {
-                            // Returning user - skip GradeLevelScreen
-                            navigation.replace('MainTabs', { screen: 'Camera' });
-                        } else {
-                            // First time signing in - show GradeLevelScreen
-                            navigation.replace('GradeLevel');
-                        }
-                    } catch (error) {
-                        // Default to showing GradeLevelScreen on error
-                        navigation.replace('GradeLevel');
-                    }
-                } else {
-                    navigation.replace('GradeLevel');
-                }
+                // The useEffect listener handles navigation upon successful session creation.
             } catch (error: any) {
                 Alert.alert('Sign In Error', error.message || 'Failed to sign in');
             }
         }
+        setLoading(false);
     };
 
     const handleForgotPassword = () => {
-        alert('Password reset link sent to your email!');
+        Alert.alert('Password Reset', 'Password reset functionality is not implemented yet.');
     };
 
+    // Handle OAuth login
     const handleSocialLogin = async (provider: 'google' | 'facebook' | 'apple') => {
+        setLoading(true);
         try {
+            // This opens the browser. When the browser closes and the session is active, 
+            // the useEffect listener handles the navigation.
             await SupabaseAuth.signInWithOAuth(provider);
-            // OAuth will handle redirect automatically
+            // We set loading false here because the listener will take over the navigation
+            setLoading(false);
         } catch (error: any) {
-            Alert.alert('Error', error.message || `Failed to sign in with ${provider}`);
+            setLoading(false);
+            Alert.alert('Error', error.message || `Failed to sign in with ${provider}.`);
         }
     };
 
     const handleGuest = () => {
-        // Navigate to the main app tabs
         navigation.replace('GradeLevel');
     };
 
@@ -307,14 +283,14 @@ export default function LoginScreen({ navigation }: any) {
 
                     {/* Action button with dynamic text */}
                     <View style={styles.actions}>
-                        <TouchableOpacity style={styles.mainButton} onPress={handleAuth}>
+                        <TouchableOpacity style={styles.mainButton} onPress={handleAuth} disabled={loading}>
                             <Text style={styles.mainButtonText}>
-                                {isSignUp ? 'Create Account' : 'Sign In'}
+                                {loading && !isSignUp ? 'Signing In...' : (isSignUp ? 'Create Account' : 'Sign In')}
                             </Text>
                         </TouchableOpacity>
 
                         {/* Toggle mode button */}
-                        <TouchableOpacity style={styles.secondaryButton} onPress={toggleMode}>
+                        <TouchableOpacity style={styles.secondaryButton} onPress={toggleMode} disabled={loading}>
                             <Text style={styles.secondaryButtonText}>
                                 {isSignUp ? 'Already have an account? Sign In' : 'Create New Account'}
                             </Text>
@@ -333,26 +309,29 @@ export default function LoginScreen({ navigation }: any) {
                         <TouchableOpacity
                             style={styles.socialButton}
                             onPress={() => handleSocialLogin('google')}
+                            disabled={loading}
                         >
                             <Ionicons name="logo-google" size={24} color={colors.text} />
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={styles.socialButton}
                             onPress={() => handleSocialLogin('facebook')}
+                            disabled={loading}
                         >
                             <Ionicons name="logo-facebook" size={24} color={colors.text} />
                         </TouchableOpacity>
-                        <TouchableOpacity
+                        { /* <TouchableOpacity
                             style={styles.socialButton}
                             onPress={() => handleSocialLogin('apple')}
+                            disabled={loading}
                         >
                             <Ionicons name="logo-apple" size={24} color={colors.text} />
-                        </TouchableOpacity>
+                        </TouchableOpacity>*/}
                     </View>
 
                     {/* Guest Mode */}
                     <View style={styles.guestContainer}>
-                        <TouchableOpacity style={styles.guestButton} onPress={handleGuest}>
+                        <TouchableOpacity style={styles.guestButton} onPress={handleGuest} disabled={loading}>
                             <Text style={styles.guestButtonText}>Continue as Guest</Text>
                             <Ionicons name="arrow-forward" size={20} color={colors.primary} />
                         </TouchableOpacity>

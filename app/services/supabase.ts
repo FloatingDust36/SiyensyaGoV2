@@ -3,6 +3,16 @@ import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
+import * as WebBrowser from 'expo-web-browser';
+import { makeRedirectUri } from 'expo-auth-session';
+
+// 1. Tell WebBrowser to close the session (needed for Android)
+WebBrowser.maybeCompleteAuthSession();
+
+// 2. Define your scheme and redirect URI
+const redirectUri = makeRedirectUri({
+    scheme: 'siyensyago', // Must match the scheme in app.json
+});
 
 // CLIENT CONFIGURATION
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -22,6 +32,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         detectSessionInUrl: false,
     },
 });
+
 
 // AUTHENTICATION FUNCTIONS
 export const SupabaseAuth = {
@@ -53,14 +64,28 @@ export const SupabaseAuth = {
         return data;
     },
 
-    // Sign in with Google/Facebook
+    // Sign in with Google/Facebook (Uses Expo WebBrowser for OAuth flow)
     async signInWithOAuth(provider: 'google' | 'facebook' | 'apple') {
+        // 3. Construct the Supabase OAuth URL with the redirect URI
         const { data, error } = await supabase.auth.signInWithOAuth({
             provider,
+            options: {
+                redirectTo: redirectUri,
+                skipBrowserRedirect: true, // Crucial for using expo-web-browser
+            },
         });
 
         if (error) throw error;
-        return data;
+
+        // 4. Open the login URL in the Expo WebBrowser
+        const res = await WebBrowser.openAuthSessionAsync(
+            data?.url ?? '',
+            redirectUri
+        );
+
+        // This function returns the WebBrowser result, and Supabase's internal listener 
+        // will handle the final session creation upon successful deep link return.
+        return res; 
     },
 
     // Sign out
@@ -124,7 +149,7 @@ export const SupabaseStorage = {
         try {
             // Read image as base64
             const base64 = await FileSystem.readAsStringAsync(localUri, {
-                encoding: 'base64', // FIXED: Removed EncodingType
+                encoding: 'base64',
             });
 
             // Generate unique filename
