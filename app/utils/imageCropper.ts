@@ -1,13 +1,13 @@
-// app/utils/imageCropper.ts
+// app/utils/imageCropper.ts - FINAL FIX: No Rotation + New API
 
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'react-native';
 
 const CROPS_DIR = `${FileSystem.documentDirectory}siyensyago_crops/`;
-const PADDING_PERCENTAGE = 0.05; // REDUCED from 0.10 to 0.05 (5% padding for tighter crops)
-const MAX_CROP_SIZE = 1200; // 🔧 NEW: Maximum dimension (width or height)
-const JPEG_QUALITY = 0.85; // 🔧 INCREASED from 0.8 for better quality
+const PADDING_PERCENTAGE = 0.05; // 5% padding
+const MAX_CROP_SIZE = 1200;
+const JPEG_QUALITY = 0.85;
 
 // Ensure crop directory exists
 async function ensureCropDirectory(): Promise<void> {
@@ -24,7 +24,7 @@ function getImageDimensions(imageUri: string): Promise<{ width: number; height: 
         Image.getSize(
             imageUri,
             (width, height) => {
-                console.log(`📐 Original image dimensions: ${width}x${height}`);
+                console.log(`📐 Image dimensions from Image.getSize: ${width}x${height}`);
                 resolve({ width, height });
             },
             (error) => {
@@ -35,149 +35,143 @@ function getImageDimensions(imageUri: string): Promise<{ width: number; height: 
     });
 }
 
-// 🔧 FIXED: Convert percentage-based bounding box to pixel coordinates
+// 🔧 SIMPLIFIED: Direct percentage to pixel conversion
+// No rotation, no complex calculations - just straight mapping
 function calculateCropCoordinates(
     boundingBox: { x: number; y: number; width: number; height: number },
     imageWidth: number,
     imageHeight: number
 ): { originX: number; originY: number; width: number; height: number } {
 
-    console.log('📊 Bounding Box Input (percentages):', {
-        x: boundingBox.x,
-        y: boundingBox.y,
-        width: boundingBox.width,
-        height: boundingBox.height
-    });
+    console.log('📊 INPUT - Bounding Box (percentages):', boundingBox);
+    console.log('📊 INPUT - Image dimensions:', { width: imageWidth, height: imageHeight });
 
-    // Step 1: Convert percentages to pixels
-    // ✅ ASSUMPTION: x,y are TOP-LEFT corner (as per Gemini prompt)
+    // Step 1: Direct percentage to pixel conversion
+    // Gemini returns percentages relative to the image as it was analyzed
     const xPixel = (boundingBox.x / 100) * imageWidth;
     const yPixel = (boundingBox.y / 100) * imageHeight;
     const widthPixel = (boundingBox.width / 100) * imageWidth;
     const heightPixel = (boundingBox.height / 100) * imageHeight;
 
-    console.log('📊 Step 1 - Converted to pixels:', {
+    console.log('📊 STEP 1 - Pixels (no padding):', {
         x: xPixel,
         y: yPixel,
         width: widthPixel,
         height: heightPixel
     });
 
-    // Step 2: Calculate padding (5% of object size) - REDUCED for tighter crops
+    // Step 2: Add padding (5% on each side)
     const paddingX = widthPixel * PADDING_PERCENTAGE;
     const paddingY = heightPixel * PADDING_PERCENTAGE;
 
-    console.log('📊 Step 2 - Padding calculated:', {
-        paddingX,
-        paddingY
-    });
+    console.log('📊 STEP 2 - Padding amounts:', { paddingX, paddingY });
 
-    // Step 3: Apply padding with boundary checks
-    let paddedX = Math.max(0, xPixel - paddingX);
-    let paddedY = Math.max(0, yPixel - paddingY);
-    let paddedWidth = Math.min(imageWidth - paddedX, widthPixel + (paddingX * 2));
-    let paddedHeight = Math.min(imageHeight - paddedY, heightPixel + (paddingY * 2));
+    // Step 3: Apply padding with boundary protection
+    let cropX = Math.max(0, xPixel - paddingX);
+    let cropY = Math.max(0, yPixel - paddingY);
+    let cropWidth = widthPixel + (paddingX * 2);
+    let cropHeight = heightPixel + (paddingY * 2);
 
-    console.log('📊 Step 3 - After padding and boundary checks:', {
-        paddedX,
-        paddedY,
-        paddedWidth,
-        paddedHeight
-    });
-
-    // Step 4: Ensure minimum size (at least 100px for visibility)
-    paddedWidth = Math.max(100, paddedWidth);
-    paddedHeight = Math.max(100, paddedHeight);
-
-    // Step 5: Final boundary check (ensure we don't go out of image)
-    if (paddedX + paddedWidth > imageWidth) {
-        paddedWidth = imageWidth - paddedX;
+    // Ensure we don't exceed image bounds
+    if (cropX + cropWidth > imageWidth) {
+        cropWidth = imageWidth - cropX;
     }
-    if (paddedY + paddedHeight > imageHeight) {
-        paddedHeight = imageHeight - paddedY;
+    if (cropY + cropHeight > imageHeight) {
+        cropHeight = imageHeight - cropY;
     }
 
+    console.log('📊 STEP 3 - With padding (before rounding):', {
+        x: cropX,
+        y: cropY,
+        width: cropWidth,
+        height: cropHeight
+    });
+
+    // Step 4: Round to integers
     const result = {
-        originX: Math.round(paddedX),
-        originY: Math.round(paddedY),
-        width: Math.round(paddedWidth),
-        height: Math.round(paddedHeight)
+        originX: Math.round(cropX),
+        originY: Math.round(cropY),
+        width: Math.round(cropWidth),
+        height: Math.round(cropHeight)
     };
 
-    console.log('📊 Step 4 - Final crop coordinates (rounded):', result);
+    console.log('📊 FINAL - Crop coordinates (integers):', result);
 
-    // Validate result
+    // Validate
     if (result.originX < 0 || result.originY < 0 ||
         result.width <= 0 || result.height <= 0 ||
         result.originX + result.width > imageWidth ||
         result.originY + result.height > imageHeight) {
-        console.error('⚠️ Invalid crop coordinates detected!');
-        console.error('Image size:', { width: imageWidth, height: imageHeight });
-        console.error('Crop result:', result);
+        console.error('⚠️ INVALID CROP COORDINATES!');
+        console.error('Image bounds:', { width: imageWidth, height: imageHeight });
+        console.error('Crop attempt:', result);
+        throw new Error('Invalid crop coordinates - would exceed image bounds');
     }
 
     return result;
 }
 
-// 🔧 FIXED: Crop image for a single object - REMOVED DISTORTING RESIZE
+// 🔧 MAIN FUNCTION: Using new non-deprecated API
 export async function cropImageForObject(
     imageUri: string,
     boundingBox: { x: number; y: number; width: number; height: number },
     objectName: string
 ): Promise<string> {
     try {
-        console.log('✂️ Starting crop operation for:', objectName);
+        console.log('\n✂️ ===== CROP OPERATION START =====');
+        console.log('📷 Object:', objectName);
         console.log('📷 Image URI:', imageUri);
+        console.log('📦 Bounding Box:', boundingBox);
 
         await ensureCropDirectory();
 
-        // Get actual image dimensions
+        // Get original image dimensions
         const { width: imageWidth, height: imageHeight } = await getImageDimensions(imageUri);
 
         // Calculate crop coordinates
         const cropCoords = calculateCropCoordinates(boundingBox, imageWidth, imageHeight);
 
-        console.log('✂️ Cropping with coordinates:', cropCoords);
+        console.log('✂️ Executing crop with coordinates:', cropCoords);
 
-        // 🔧 FIXED: Single crop operation, smart resizing only if needed
-        const operations: any[] = [
-            {
-                crop: {
-                    originX: cropCoords.originX,
-                    originY: cropCoords.originY,
-                    width: cropCoords.width,
-                    height: cropCoords.height
-                }
-            }
-        ];
+        // 🔧 NEW: Use the new non-deprecated API
+        const manipulator = await ImageManipulator.manipulate(imageUri);
 
-        // 🔧 NEW: Only resize if crop is larger than MAX_CROP_SIZE
-        // AND maintain aspect ratio!
+        // Apply crop
+        const croppedManipulator = manipulator.crop({
+            originX: cropCoords.originX,
+            originY: cropCoords.originY,
+            width: cropCoords.width,
+            height: cropCoords.height
+        });
+
+        // Apply resize if needed (to keep file size reasonable)
         const maxDimension = Math.max(cropCoords.width, cropCoords.height);
+        let finalManipulator = croppedManipulator;
+
         if (maxDimension > MAX_CROP_SIZE) {
             const scale = MAX_CROP_SIZE / maxDimension;
-            operations.push({
-                resize: {
-                    width: Math.round(cropCoords.width * scale),
-                    height: Math.round(cropCoords.height * scale)
-                }
+            const newWidth = Math.round(cropCoords.width * scale);
+            const newHeight = Math.round(cropCoords.height * scale);
+
+            console.log(`📐 Resizing to: ${newWidth}x${newHeight} (scale: ${scale.toFixed(2)})`);
+
+            finalManipulator = croppedManipulator.resize({
+                width: newWidth,
+                height: newHeight
             });
-            console.log(`📐 Resizing to maintain aspect ratio: ${Math.round(cropCoords.width * scale)}x${Math.round(cropCoords.height * scale)}`);
         }
 
-        // Perform crop operation
-        const croppedImage = await manipulateAsync(
-            imageUri,
-            operations,
-            {
-                compress: JPEG_QUALITY,
-                format: SaveFormat.JPEG
-            }
-        );
+        // Save with compression
+        const result = await finalManipulator.renderAsync({
+            compress: JPEG_QUALITY,
+            format: ImageManipulator.SaveFormat.JPEG
+        });
 
-        console.log('✅ Crop successful, result URI:', croppedImage.uri);
+        console.log('✅ Crop successful!');
+        console.log('📸 Result URI:', result.uri);
+        console.log('📐 Result dimensions:', { width: result.width, height: result.height });
 
-        // Generate unique filename
+        // Save to permanent storage
         const sanitizedName = objectName
             .replace(/[^a-zA-Z0-9]/g, '_')
             .toLowerCase()
@@ -186,25 +180,30 @@ export async function cropImageForObject(
         const filename = `${sanitizedName}_${timestamp}.jpg`;
         const permanentUri = `${CROPS_DIR}${filename}`;
 
-        // Move to permanent storage
         await FileSystem.copyAsync({
-            from: croppedImage.uri,
+            from: result.uri,
             to: permanentUri
         });
 
-        console.log(`✓ Cropped image saved: ${filename}`);
+        console.log(`✓ Saved to permanent storage: ${filename}`);
+        console.log('✂️ ===== CROP OPERATION END =====\n');
+
         return permanentUri;
 
     } catch (error) {
-        console.error('❌ Error cropping image:', error);
-        console.error('Stack trace:', error);
-        // Fallback: return original image if cropping fails
-        console.warn('⚠️ Falling back to original image');
+        console.error('\n❌ ===== CROP OPERATION FAILED =====');
+        console.error('Error:', error);
+        console.error('Object:', objectName);
+        console.error('Bounding box:', boundingBox);
+        console.error('⚠️ Falling back to original image');
+        console.error('===== ERROR END =====\n');
+
+        // Fallback to original image
         return imageUri;
     }
 }
 
-// Crop multiple objects from same image (batch operation)
+// Batch crop multiple objects
 export async function cropMultipleObjects(
     imageUri: string,
     objects: Array<{
@@ -227,7 +226,6 @@ export async function cropMultipleObjects(
             croppedImages.set(object.id, croppedUri);
         } catch (error) {
             console.error(`❌ Failed to crop "${object.name}":`, error);
-            // Use original image as fallback
             croppedImages.set(object.id, imageUri);
         }
     }
@@ -249,7 +247,7 @@ export async function deleteCroppedImage(croppedUri: string): Promise<void> {
     }
 }
 
-// Clean up old cropped images (maintenance function)
+// Clean up old crops
 export async function cleanupOldCrops(daysOld: number = 30): Promise<number> {
     try {
         await ensureCropDirectory();

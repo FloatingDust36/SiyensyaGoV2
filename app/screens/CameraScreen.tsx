@@ -124,15 +124,25 @@ export default function CameraScreen() {
             setIsScanning(true);
 
             // Haptic feedback on scan
-            console.log('Triggering haptic feedback...'); // for testing
+            console.log('Triggering haptic feedback...');
             await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            console.log('Haptic feedback triggered'); // for testing
+            console.log('Haptic feedback triggered');
 
             try {
+                // 🔧 CRITICAL FIX: Add exif: false to prevent rotation
                 const photo = await cameraRef.current.takePictureAsync({
                     quality: 0.7,
+                    exif: false,  // ← PREVENTS AUTO-ROTATION
+                    skipProcessing: true,  // ← PREVENTS POST-PROCESSING
                 });
+
                 if (photo) {
+                    console.log('📸 Photo captured:', {
+                        uri: photo.uri,
+                        width: photo.width,
+                        height: photo.height
+                    });
+
                     navigation.navigate('ObjectRecognition', { imageUri: photo.uri });
                 }
             } catch (error) {

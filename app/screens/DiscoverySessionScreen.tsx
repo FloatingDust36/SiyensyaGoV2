@@ -1,4 +1,4 @@
-// app/screens/DiscoverySessionScreen.tsx
+// app/screens/DiscoverySessionScreen.tsx - COMPLETE FIXED VERSION
 import React, { useState } from 'react';
 import {
     View,
@@ -27,7 +27,7 @@ type NavigationProp = StackNavigationProp<RootStackParamList>;
 
 const { width } = Dimensions.get('window');
 
-// Helper function to calculate actual image dimensions within the container
+// 🔧 FIXED: Calculate actual image dimensions within the container
 function calculateActualImageLayout(
     containerWidth: number,
     containerHeight: number,
@@ -144,9 +144,7 @@ export default function DiscoverySessionScreen() {
         );
     };
 
-    /**
-     * Toggle object selection (for multi-select mode)
-     */
+    // Toggle object selection (for multi-select mode)
     const toggleObjectSelection = async (objectId: string) => {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -161,9 +159,7 @@ export default function DiscoverySessionScreen() {
         });
     };
 
-    /**
-     * UNIFIED LEARNING HANDLER - Works for both single and batch
-     */
+    // UNIFIED LEARNING HANDLER - Works for both single and batch
     const handleLearnSelected = async () => {
         if (selectedObjects.size === 0) {
             Alert.alert('No Objects Selected', 'Please select at least one object to learn about.');
@@ -195,9 +191,7 @@ export default function DiscoverySessionScreen() {
         );
     };
 
-    /**
-     * Start learning flow (handles both single and batch)
-     */
+    // Start learning flow (handles both single and batch)
     const startLearning = async (objectsQueue: DetectedObject[]) => {
         setIsAnalyzing(true);
 
@@ -346,24 +340,20 @@ export default function DiscoverySessionScreen() {
                         onLayout={handleImageLayout}
                     />
 
-                    {/* Render bounding boxes for SELECTED objects only */}
+                    {/* 🔧 FIXED: Render bounding boxes for SELECTED objects only */}
                     {actualImageLayout && unexploredObjects.map((object) => {
                         const isSelected = selectedObjects.has(object.id);
 
                         if (!isSelected) return null;
 
-                        // Calculate bounding box position on the ACTUAL visible image
+                        // 🔧 FIXED: Calculate bounding box position on the ACTUAL visible image
+                        // Gemini returns percentages of the FULL image (e.g., 1536x2040)
+                        // We need to map these to the DISPLAYED image area (accounting for letterboxing)
+
                         const boxLeft = actualImageLayout.offsetX + (object.boundingBox.x / 100) * actualImageLayout.actualWidth;
                         const boxTop = actualImageLayout.offsetY + (object.boundingBox.y / 100) * actualImageLayout.actualHeight;
                         const boxWidth = (object.boundingBox.width / 100) * actualImageLayout.actualWidth;
                         const boxHeight = (object.boundingBox.height / 100) * actualImageLayout.actualHeight;
-
-                        console.log(`📦 Bounding box for ${object.name}:`, {
-                            container: imageContainerLayout,
-                            actualImage: actualImageLayout,
-                            percentages: object.boundingBox,
-                            calculated: { boxLeft, boxTop, boxWidth, boxHeight }
-                        });
 
                         const confidenceColor = getConfidenceColor(object.confidence);
 
