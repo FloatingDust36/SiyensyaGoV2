@@ -1,11 +1,11 @@
-// app/screens/LearningContentScreen.tsx
+// In app/screens/LearningContentScreen.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Animated, Dimensions, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
-import { RootStackParamList, AnalysisResult, SceneContext } from '../navigation/types';
+import { RootStackParamList, AnalysisResult, SceneContext, DetectedObject } from '../navigation/types';
 import { colors, fonts } from '../theme/theme';
 import { useApp } from '../context/AppContext';
 import { saveImagePermanently } from '../services/imageStorage';
@@ -13,7 +13,6 @@ import * as Haptics from 'expo-haptics';
 import { cropImageForObject } from '../utils/imageCropper';
 import { sessionManager } from '../utils/sessionManager';
 import { analyzeSelectedObject } from '../services/gemini';
-import { DetectedObject } from '../navigation/types';
 
 type LearningContentRouteProp = RouteProp<RootStackParamList, 'LearningContent'>;
 type NavigationProp = StackNavigationProp<RootStackParamList>;
@@ -118,7 +117,6 @@ export default function LearningContentScreen() {
                 setBatchQueue(route.params.batchQueue);
                 setCurrentBatchIndex(route.params.currentBatchIndex);
                 setIsInBatchMode(true);
-                console.log(`📦 Batch mode: Object ${route.params.currentBatchIndex + 1}/${route.params.batchQueue.length}`);
             }
 
             if (sid) {
@@ -129,7 +127,6 @@ export default function LearningContentScreen() {
                     if (session) {
                         if (session.context) {
                             setSceneContext(session.context);
-                            console.log(`✓ Loaded scene context: ${session.context.location}`);
                         }
                         setExploredObjectIds(session.exploredObjectIds || []);
 
@@ -140,10 +137,6 @@ export default function LearningContentScreen() {
                             const unexplored = session.detectedObjects.length - session.exploredObjectIds.length;
                             setRemainingCount(unexplored);
                         }
-
-                        console.log(`✓ Session loaded: ${session.exploredObjectIds.length}/${session.detectedObjects.length} explored`);
-                    } else {
-                        console.warn('⚠️ Session not found:', sid);
                     }
                 } catch (error) {
                     console.error('Error loading session:', error);
@@ -166,7 +159,6 @@ export default function LearningContentScreen() {
                     const session = await sessionManager.getSession(sid);
                     if (session && !session.exploredObjectIds.includes(objId)) {
                         await sessionManager.markObjectAsExplored(sid, objId);
-                        console.log(`✓ Auto-marked ${result.objectName} as explored`);
 
                         const updatedSession = await sessionManager.getSession(sid);
                         if (updatedSession) {
@@ -179,7 +171,6 @@ export default function LearningContentScreen() {
                             }
 
                             setExploredObjectIds(updatedSession.exploredObjectIds);
-                            console.log(`📊 Session progress: ${updatedSession.exploredObjectIds.length}/${updatedSession.detectedObjects.length}`);
                         }
                     }
                 } catch (error) {
@@ -229,19 +220,6 @@ export default function LearningContentScreen() {
 
     const handleScanAnother = () => navigation.navigate('MainTabs', { screen: 'Camera' });
 
-    const handleExploreMore = async () => {
-        if (sessionId) {
-            const session = await sessionManager.getSession(sessionId);
-            if (session) {
-                navigation.navigate('ObjectSelection', {
-                    sessionId: sessionId,
-                    imageUri: session.fullImageUri,
-                    detectedObjects: session.detectedObjects,
-                });
-            }
-        }
-    };
-
     const handleBackToSession = async () => {
         if (isInBatchMode && batchQueue.length > 0) {
             const nextIndex = currentBatchIndex + 1;
@@ -290,8 +268,6 @@ export default function LearningContentScreen() {
         setIsLoadingNextObject(true);
 
         try {
-            console.log(`🔄 Loading next object: ${nextObject.name} (${nextIndex + 1}/${batchQueue.length})`);
-
             const result = await analyzeSelectedObject(
                 imageUri,
                 nextObject.name,
@@ -415,8 +391,6 @@ export default function LearningContentScreen() {
                             const unexploredCount = updatedSession.detectedObjects.length - updatedSession.exploredObjectIds.length;
                             setRemainingCount(unexploredCount);
                         }
-
-                        console.log(`📊 Session progress: ${updatedSession.exploredObjectIds.length}/${updatedSession.detectedObjects.length}`);
                     }
                 } catch (error) {
                     console.error('Error refreshing session state:', error);
@@ -515,6 +489,7 @@ export default function LearningContentScreen() {
                     <Image
                         source={{ uri: croppedImageUri || imageUri }}
                         style={styles.image}
+                        resizeMode="contain" // Ensure full image is visible
                     />
                     {isLoadingCrop && (
                         <View style={styles.cropLoadingOverlay}>
@@ -792,6 +767,7 @@ const styles = StyleSheet.create({
         marginBottom: 20,
         overflow: 'hidden',
         position: 'relative',
+        backgroundColor: '#1A1C2A', // Added background for "contain" mode
     },
     image: {
         width: '100%',
