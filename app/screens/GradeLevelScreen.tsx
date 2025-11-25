@@ -65,25 +65,67 @@ export default function GradeLevelScreen() {
     }, []);
 
     const handleContinue = async () => {
+        console.log('handleContinue called');
         setIsProcessing(true);
         try {
-            await updateUser({ gradeLevel: selectedLevel });
-
-            // Mark onboarding as complete
-            const { SupabaseProfile, SupabaseAuth } = require('../services/supabase');
-            const session = await SupabaseAuth.getSession();
-
-            if (session?.user) {
-                await SupabaseProfile.updateProfile(session.user.id, {
-                    grade_level: selectedLevel,
-                    has_completed_onboarding: true,
-                });
+            console.log('Starting grade level update for:', selectedLevel);
+            
+            // Wrap updateUser with timeout to prevent hanging
+            const updateUserPromise = updateUser({ gradeLevel: selectedLevel });
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Update user timeout')), 3000)
+            );
+            
+            try {
+                await Promise.race([updateUserPromise, timeoutPromise]);
+                console.log('User updated successfully');
+            } catch (updateError) {
+                console.warn('User update timed out or failed:', updateError);
+                // Continue anyway - the local state is updated
             }
 
+            // Try to update profile in Supabase, but don't wait too long
+            try {
+                console.log('Attempting to update Supabase profile');
+                const { SupabaseProfile, SupabaseAuth } = require('../services/supabase');
+                
+                // Timeout for getting session
+                const getSessionPromise = SupabaseAuth.getSession();
+                const sessionTimeoutPromise = new Promise((resolve) => 
+                    setTimeout(() => resolve(null), 1000)
+                );
+                
+                const session = await Promise.race([getSessionPromise, sessionTimeoutPromise]);
+                console.log('Got session:', !!session);
+
+                if (session?.user) {
+                    console.log('Updating profile for user:', session.user.id);
+                    const updatePromise = SupabaseProfile.updateProfile(session.user.id, {
+                        grade_level: selectedLevel,
+                        has_completed_onboarding: true,
+                    });
+                    
+                    const profileTimeoutPromise = new Promise((resolve) => 
+                        setTimeout(() => resolve(null), 2000)
+                    );
+                    
+                    await Promise.race([updatePromise, profileTimeoutPromise]);
+                    console.log('Profile updated successfully');
+                } else {
+                    console.log('No session found, skipping profile update');
+                }
+            } catch (profileError) {
+                console.warn('Profile update failed or timed out:', profileError);
+                // Don't block navigation if profile update fails
+            }
+
+            console.log('Navigating to MainTabs Camera screen');
             navigation.replace('MainTabs', { screen: 'Camera' });
         } catch (error) {
-            console.error('Error saving grade level:', error);
-            Alert.alert('Error', 'Failed to save grade level. Please try again.');
+            console.error('Error in handleContinue:', error);
+            // Still navigate even if there's an error
+            console.log('Error occurred but navigating anyway');
+            navigation.replace('MainTabs', { screen: 'Camera' });
         } finally {
             setIsProcessing(false);
         }
@@ -91,21 +133,54 @@ export default function GradeLevelScreen() {
 
     const handleSkip = async () => {
         try {
-            await updateUser({ gradeLevel: 'juniorHigh' });
+            // Wrap updateUser with timeout
+            const updateUserPromise = updateUser({ gradeLevel: 'juniorHigh' });
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Update user timeout')), 3000)
+            );
+            
+            try {
+                await Promise.race([updateUserPromise, timeoutPromise]);
+            } catch (updateError) {
+                console.warn('User update timed out or failed:', updateError);
+                // Continue anyway
+            }
 
-            // Mark onboarding as complete even if skipped
-            const { SupabaseProfile, SupabaseAuth } = require('../services/supabase');
-            const session = await SupabaseAuth.getSession();
+            // Try to mark onboarding as complete, but don't wait too long
+            try {
+                console.log('Attempting to update Supabase profile (skip)');
+                const { SupabaseProfile, SupabaseAuth } = require('../services/supabase');
+                
+                // Timeout for getting session
+                const getSessionPromise = SupabaseAuth.getSession();
+                const sessionTimeoutPromise = new Promise((resolve) => 
+                    setTimeout(() => resolve(null), 1000)
+                );
+                
+                const session = await Promise.race([getSessionPromise, sessionTimeoutPromise]);
 
-            if (session?.user) {
-                await SupabaseProfile.updateProfile(session.user.id, {
-                    has_completed_onboarding: true,
-                });
+                if (session?.user) {
+                    const updatePromise = SupabaseProfile.updateProfile(session.user.id, {
+                        has_completed_onboarding: true,
+                    });
+                    
+                    const profileTimeoutPromise = new Promise((resolve) => 
+                        setTimeout(() => resolve(null), 2000)
+                    );
+                    
+                    await Promise.race([updatePromise, profileTimeoutPromise]);
+                    console.log('Profile updated successfully (skip)');
+                }
+            } catch (profileError) {
+                console.warn('Profile update failed or timed out:', profileError);
+                // Don't block navigation if profile update fails
             }
 
             navigation.replace('MainTabs', { screen: 'Camera' });
         } catch (error) {
-            console.error('Error:', error);
+            console.error('Error in handleSkip:', error);
+            // Still navigate even if there's an error
+            navigation.replace('MainTabs', { screen: 'Camera' });
         }
     };
 

@@ -114,7 +114,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Handle user sign in
     const handleUserSignIn = async (supabaseUser: any) => {
         try {
-            const profile = await SupabaseProfile.getProfile(supabaseUser.id);
+            console.log('handleUserSignIn called for user:', supabaseUser.id);
+            
+            // Fetch profile with 3 second timeout
+            const profilePromise = SupabaseProfile.getProfile(supabaseUser.id);
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Profile query timeout')), 3000)
+            );
+            
+            let profile;
+            try {
+                profile = await Promise.race([profilePromise, timeoutPromise]);
+            } catch (timeoutErr) {
+                console.log('Profile query timed out after 3s, continuing with defaults');
+                profile = null;
+            }
+
+            // If profile doesn't exist (new user or timeout), create a default one
+            if (!profile) {
+                console.log('No profile found for new user, creating default');
+                const userData: UserData = {
+                    isGuest: false,
+                    userName: supabaseUser.email?.split('@')[0] || 'User',
+                    email: supabaseUser.email,
+                    gradeLevel: 'elementary', // Default grade level
+                };
+                setUser(userData);
+                await StorageService.saveUser(userData);
+                return;
+            }
 
             const userData: UserData = {
                 isGuest: false,
@@ -129,6 +157,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
             await syncSettingsFromCloud(supabaseUser.id);
         } catch (error) {
             console.error('Error handling sign in:', error);
+            // Still mark as authenticated even if profile fetch fails
+            const userData: UserData = {
+                isGuest: false,
+                userName: supabaseUser.email?.split('@')[0] || 'User',
+                email: supabaseUser.email,
+                gradeLevel: 'elementary',
+            };
+            setUser(userData);
+            await StorageService.saveUser(userData);
         }
     };
 

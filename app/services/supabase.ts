@@ -66,26 +66,65 @@ export const SupabaseAuth = {
 
     // Sign in with Google/Facebook (Uses Expo WebBrowser for OAuth flow)
     async signInWithOAuth(provider: 'google' | 'facebook' | 'apple') {
-        // 3. Construct the Supabase OAuth URL with the redirect URI
-        const { data, error } = await supabase.auth.signInWithOAuth({
-            provider,
-            options: {
-                redirectTo: redirectUri,
-                skipBrowserRedirect: true, // Crucial for using expo-web-browser
-            },
-        });
+        try {
+            const { data, error } = await supabase.auth.signInWithOAuth({
+                provider,
+                options: {
+                    redirectTo: redirectUri,
+                    skipBrowserRedirect: true,
+                },
+            });
 
-        if (error) throw error;
+            if (error) throw error;
 
-        // 4. Open the login URL in the Expo WebBrowser
-        const res = await WebBrowser.openAuthSessionAsync(
-            data?.url ?? '',
-            redirectUri
-        );
+            // Open the login URL in WebBrowser
+            const result = await WebBrowser.openAuthSessionAsync(
+                data?.url ?? '',
+                redirectUri
+            );
 
-        // This function returns the WebBrowser result, and Supabase's internal listener 
-        // will handle the final session creation upon successful deep link return.
-        return res; 
+            console.log("OAuth Redirect Result:", result.type);
+
+            if (result.type === 'success' && result.url) {
+                console.log("OAuth Success URL:", result.url);
+                
+                // Manually extract tokens from the deep link URL
+                try {
+                    const url = new URL(result.url);
+                    const hashParams = new URLSearchParams(url.hash.substring(1));
+                    
+                    const accessToken = hashParams.get('access_token');
+                    const refreshToken = hashParams.get('refresh_token');
+                    const expiresIn = hashParams.get('expires_in');
+
+                    if (accessToken && refreshToken) {
+                        // Set the session with extracted tokens
+                        const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+                            access_token: accessToken,
+                            refresh_token: refreshToken,
+                        });
+
+                        if (sessionError) {
+                            console.error('Error setting session:', sessionError);
+                            throw sessionError;
+                        }
+
+                        console.log('OAuth session successfully set');
+                        // The onAuthStateChange listener will fire automatically
+                    } else {
+                        throw new Error('Missing access_token or refresh_token in OAuth callback');
+                    }
+                } catch (parseError) {
+                    console.error('Error parsing OAuth callback:', parseError);
+                    throw parseError;
+                }
+            } else if (result.type === 'cancel' || result.type === 'dismiss') {
+                throw new Error('OAuth flow was cancelled by the user.');
+            }
+        } catch (error) {
+            console.error('OAuth error:', error);
+            throw error;
+        }
     },
 
     // Sign out
@@ -111,14 +150,35 @@ export const SupabaseAuth = {
 export const SupabaseProfile = {
     // Get user profile
     async getProfile(userId: string) {
-        const { data, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', userId)
-            .single();
+        try {
+            console.log('Starting profile query for user:', userId);
+            const startTime = Date.now();
+            
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', userId)
+                .single();
 
-        if (error) throw error;
-        return data;
+            const queryTime = Date.now() - startTime;
+            console.log('Profile query completed in', queryTime, 'ms');
+
+            if (error) {
+                // PGRST116 means no rows found - this is expected for new users
+                if (error.code === 'PGRST116') {
+                    console.log('No profile found for new user:', userId);
+                    return null;
+                }
+                console.error('Profile query error:', error.code, error.message);
+                throw error;
+            }
+            
+            console.log('Profile found successfully');
+            return data;
+        } catch (err: any) {
+            console.error('Error fetching profile:', err.message || err);
+            throw err;
+        }
     },
 
     // Update profile

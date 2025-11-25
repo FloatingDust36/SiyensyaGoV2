@@ -15,6 +15,7 @@ export default function LoginScreen({ navigation }: any) {
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [loading, setLoading] = useState(false); // New loading state for buttons
+    const [hasNavigated, setHasNavigated] = useState(false); // Prevent duplicate navigation
 
     // Animation values
     const slideAnim = React.useRef(new Animated.Value(0)).current;
@@ -41,25 +42,33 @@ export default function LoginScreen({ navigation }: any) {
     // AUTHENTICATION LISTENER: Handles navigation after successful OAuth or manual login/signup
     useEffect(() => {
         setLoading(true);
+        setHasNavigated(false); // Reset on mount
+        
         // This listener fires whenever the authentication state changes (e.g., after OAuth redirect)
         const { data: authListener } = supabase.auth.onAuthStateChange(
             async (event, session) => {
-                setLoading(false);
-                if (session) {
-                    // User is signed in. Check onboarding status.
-                    try {
-                        const profile = await SupabaseProfile.getProfile(session.user.id);
-                        if (profile.has_completed_onboarding) {
-                            navigation.replace('MainTabs', { screen: 'Camera' });
-                        } else {
-                            navigation.replace('GradeLevel');
-                        }
-                    } catch (error) {
-                        // User exists but no profile yet (e.g., new OAuth user)
+                console.log('Auth event:', event, 'Session exists:', !!session);
+                
+                if (session && !hasNavigated) {
+                    // User is signed in and we haven't navigated yet
+                    console.log('User authenticated:', session.user.email);
+                    setHasNavigated(true);
+                    // Navigate to GradeLevel for all new logins
+                    // Profile will be created/checked during the onboarding flow
+                    console.log('Navigating to GradeLevel');
+                    // Use a small delay to ensure state is updated
+                    setTimeout(() => {
                         navigation.replace('GradeLevel');
-                    }
+                    }, 100);
                 } else if (event === 'SIGNED_OUT') {
                     // Do nothing, stay on login screen
+                    console.log('User signed out');
+                    setLoading(false);
+                    setHasNavigated(false);
+                } else if (event === 'INITIAL_SESSION') {
+                    // Set loading false only after initial session status is checked
+                    console.log('Initial session checked');
+                    setLoading(false);
                 }
             }
         );
@@ -67,7 +76,7 @@ export default function LoginScreen({ navigation }: any) {
         return () => {
             authListener.subscription.unsubscribe();
         };
-    }, []); // Run only once on mount
+    }, [navigation]);
 
     const glowColor = glowAnim.interpolate({
         inputRange: [0, 1],
@@ -157,10 +166,13 @@ export default function LoginScreen({ navigation }: any) {
             // This opens the browser. When the browser closes and the session is active, 
             // the useEffect listener handles the navigation.
             await SupabaseAuth.signInWithOAuth(provider);
-            // We set loading false here because the listener will take over the navigation
-            setLoading(false);
+            // Don't set loading false here - the listener will handle it after session is established
         } catch (error: any) {
             setLoading(false);
+            // This log helps distinguish a user cancel from a server error
+            if (error.message.includes('cancelled')) {
+                console.log("Login cancelled by user.");
+            }
             Alert.alert('Error', error.message || `Failed to sign in with ${provider}.`);
         }
     };
