@@ -59,7 +59,7 @@ export const GamificationService = {
                 .single();
 
             if (error) throw error;
-            return data;
+            return data as LevelProgress | null;
         } catch (error) {
             console.error('Error fetching level progress:', error);
             return null;
@@ -317,6 +317,7 @@ export const GamificationService = {
         try {
             // Get current progress
             let currentProgress = await this.getChallengeProgress(userId, challengeId);
+            let finalProgress: number;  // ← NEW: Track the final progress value
 
             if (!currentProgress) {
                 // Create new progress record
@@ -332,9 +333,11 @@ export const GamificationService = {
 
                 if (error) throw error;
                 currentProgress = data;
+                finalProgress = progressIncrement;
             } else {
                 // Update existing progress
                 const newProgress = currentProgress.current_progress + progressIncrement;
+                finalProgress = newProgress;
 
                 const { error } = await supabase
                     .from('user_challenge_progress')
@@ -344,9 +347,9 @@ export const GamificationService = {
                 if (error) throw error;
             }
 
-            // Check if challenge is complete
+            // Check if challenge is complete using finalProgress
             const challenge = await this.getTodayChallenge();
-            if (challenge && currentProgress.current_progress >= challenge.target_value) {
+            if (challenge && finalProgress >= challenge.target_value) {
                 await this.completeDailyChallenge(userId, challengeId);
             }
 
