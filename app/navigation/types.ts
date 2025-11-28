@@ -80,4 +80,6 @@ export type RootStackParamList = {
         exploredCount: number;
         totalCount: number;
     };
+    Achievements: undefined;
+    Leaderboard: undefined;
 };

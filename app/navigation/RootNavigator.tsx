@@ -8,10 +8,11 @@ import LoginScreen from '../screens/LoginScreen';
 import GradeLevelScreen from '../screens/GradeLevelScreen';
 import TabNavigator from './TabNavigator';
 import ObjectRecognitionScreen from '../screens/ObjectRecognitionScreen';
-import ObjectSelectionScreen from '../screens/ObjectSelectionScreen';
 import DiscoverySessionScreen from '../screens/DiscoverySessionScreen';
 import LearningContentScreen from '../screens/LearningContentScreen';
 import SessionSummaryScreen from '../screens/SessionSummaryScreen';
+import AchievementsScreen from '../screens/AchievementsScreen';
+import LeaderboardScreen from '../screens/LeaderboardScreen';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -29,6 +30,8 @@ export default function RootNavigator() {
             <Stack.Screen name="ObjectSelection" component={DiscoverySessionScreen} />
             <Stack.Screen name="LearningContent" component={LearningContentScreen} />
             <Stack.Screen name="SessionSummary" component={SessionSummaryScreen} />
+            <Stack.Screen name="Achievements" component={AchievementsScreen} />
+            <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
         </Stack.Navigator>
     );
 }

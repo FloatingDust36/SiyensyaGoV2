@@ -8,7 +8,26 @@ import { NavigationContainer } from '@react-navigation/native';
 import * as SystemUI from 'expo-system-ui';
 import RootNavigator from './app/navigation/RootNavigator';
 import { colors } from './app/theme/theme';
-import { AppProvider } from './app/context/AppContext';
+import { AppProvider, useApp } from './app/context/AppContext';
+import AchievementUnlockModal from './app/components/gamification/AchievementUnlockModal';
+
+// Wrapper component to access AppContext
+function AppContent() {
+  const { unlockedAchievement, setUnlockedAchievement } = useApp();
+
+  return (
+    <>
+      <RootNavigator />
+
+      {/* Global Achievement Unlock Modal */}
+      <AchievementUnlockModal
+        visible={!!unlockedAchievement}
+        achievement={unlockedAchievement}
+        onClose={() => setUnlockedAchievement(null)}
+      />
+    </>
+  );
+}
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({
@@ -17,7 +36,6 @@ export default function App() {
 
   useEffect(() => {
     if (Platform.OS === 'android') {
-      // Set the system UI (navigation bar) background color for edge-to-edge mode
       SystemUI.setBackgroundColorAsync(colors.background);
     }
   }, []);

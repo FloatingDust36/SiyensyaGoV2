@@ -1,5 +1,6 @@
-// In app/context/types.ts
+// app/context/types.ts
 import { DetectedObject, SceneContext } from '../navigation/types';
+import { UserStats, AchievementProgress } from '../types/gamification';
 
 export type GradeLevel = 'elementary' | 'juniorHigh' | 'seniorHigh';
 
@@ -41,13 +42,13 @@ export type Discovery = {
 };
 
 export type DiscoverySessionState = {
-    sessionId: string;             // Unique session ID
-    fullImageUri: string;          // Original photo path
-    detectedObjects: DetectedObject[]; // All detected objects
-    exploredObjectIds: string[];   // Which objects user learned about
-    context?: SceneContext;        // Scene context from AI
-    createdAt: number;             // Timestamp (ms)
-    expiresAt: number;             // Auto-cleanup after 24 hours
+    sessionId: string;
+    fullImageUri: string;
+    detectedObjects: DetectedObject[];
+    exploredObjectIds: string[];
+    context?: SceneContext;
+    createdAt: number;
+    expiresAt: number;
 };
 
 export type AppContextType = {
@@ -89,4 +90,18 @@ export type AppContextType = {
     isFirstLaunch: boolean;
     isOnline: boolean;
     syncStatus: string;
+
+    // Gamification (NEW)
+    userStats: UserStats | null;
+    achievementProgress: AchievementProgress[];
+    refreshGamificationData: () => Promise<void>;
+    checkAchievements: () => Promise<void>;
+
+    // Session Tracking (NEW)
+    startLearningSession: (sessionType: 'single_discovery' | 'batch_discovery' | 'museum_review') => Promise<string | null>;
+    endLearningSession: (objectsExplored: number, primaryCategory: string | null) => Promise<void>;
+
+    // Achievement Modal (NEW)
+    unlockedAchievement: AchievementProgress | null;
+    setUnlockedAchievement: (achievement: AchievementProgress | null) => void;
 };

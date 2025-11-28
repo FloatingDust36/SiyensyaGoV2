@@ -1,5 +1,4 @@
 // app/context/AppContext.tsx
-
 import NetInfo from '@react-native-community/netinfo';
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import { AppContextType, Discovery, UserData, AppSettings, GradeLevel, DiscoverySessionState } from './types';
@@ -15,6 +14,8 @@ import {
 } from '../services/supabase';
 import { sessionManager } from '../utils/sessionManager';
 import { DetectedObject, SceneContext } from '../navigation/types';
+import { GamificationService } from '../services/gamification';
+import { UserStats, AchievementProgress } from '../types/gamification';
 
 const DEFAULT_USER: UserData = {
     isGuest: true,
@@ -44,6 +45,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [syncStatus, setSyncStatus] = useState<string>('');
     const [currentSession, setCurrentSession] = useState<DiscoverySessionState | null>(null);
 
+    // Gamification State (NEW)
+    const [userStats, setUserStats] = useState<UserStats | null>(null);
+    const [achievementProgress, setAchievementProgress] = useState<AchievementProgress[]>([]);
+    const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+    const [unlockedAchievement, setUnlockedAchievement] = useState<AchievementProgress | null>(null);
+
     // Load data on mount
     useEffect(() => {
         loadInitialData();
@@ -62,10 +69,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Initialize Session Manager
     const initializeSessionManager = async () => {
         try {
-            // Initialize session manager (loads from AsyncStorage)
             await sessionManager.initialize();
-
-            // Cleanup expired sessions
             const cleanedCount = await sessionManager.cleanupExpiredSessions();
             if (cleanedCount > 0) {
                 console.log(`🧹 Cleaned up ${cleanedCount} expired sessions on startup`);
@@ -111,17 +115,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return unsubscribe;
     };
 
+    // Refresh Gamification Data (NEW)
+    const refreshGamificationData = async () => {
+        if (authUser && !user.isGuest) {
+            try {
+                const [stats, progress] = await Promise.all([
+                    GamificationService.getUserStats(authUser.id),
+                    GamificationService.getAchievementProgress(authUser.id)
+                ]);
+
+                setUserStats(stats);
+                setAchievementProgress(progress);
+            } catch (error) {
+                console.error('Error refreshing gamification data:', error);
+            }
+        }
+    };
+
+    // Check Achievements (NEW)
+    const checkAchievements = async () => {
+        if (authUser && !user.isGuest) {
+            try {
+                const newlyUnlocked = await GamificationService.checkAndUnlockAchievements(authUser.id);
+
+                if (newlyUnlocked.length > 0) {
+                    console.log(`🎉 Unlocked ${newlyUnlocked.length} achievements!`);
+                    await refreshGamificationData();
+                }
+            } catch (error) {
+                console.error('Error checking achievements:', error);
+            }
+        }
+    };
+
     // Handle user sign in
     const handleUserSignIn = async (supabaseUser: any) => {
         try {
             console.log('handleUserSignIn called for user:', supabaseUser.id);
-            
-            // Fetch profile with 3 second timeout
+
             const profilePromise = SupabaseProfile.getProfile(supabaseUser.id);
             const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Profile query timeout')), 3000)
             );
-            
+
             let profile;
             try {
                 profile = await Promise.race([profilePromise, timeoutPromise]);
@@ -130,14 +166,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 profile = null;
             }
 
-            // If profile doesn't exist (new user or timeout), create a default one
             if (!profile) {
                 console.log('No profile found for new user, creating default');
                 const userData: UserData = {
                     isGuest: false,
                     userName: supabaseUser.email?.split('@')[0] || 'User',
                     email: supabaseUser.email,
-                    gradeLevel: 'elementary', // Default grade level
+                    gradeLevel: 'elementary',
                 };
                 setUser(userData);
                 await StorageService.saveUser(userData);
@@ -155,9 +190,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
             await syncFromCloud(supabaseUser.id);
             await syncSettingsFromCloud(supabaseUser.id);
+
+            // Load gamification data (NEW)
+            await refreshGamificationData();
+
         } catch (error) {
             console.error('Error handling sign in:', error);
-            // Still mark as authenticated even if profile fetch fails
             const userData: UserData = {
                 isGuest: false,
                 userName: supabaseUser.email?.split('@')[0] || 'User',
@@ -173,6 +211,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const handleUserSignOut = async () => {
         setUser(DEFAULT_USER);
         await StorageService.saveUser(DEFAULT_USER);
+
+        // Clear gamification data (NEW)
+        setUserStats(null);
+        setAchievementProgress([]);
+        setUnlockedAchievement(null);
     };
 
     // Sync discoveries from cloud
@@ -288,7 +331,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    // Add Discovery
+    // Add Discovery (WITH GAMIFICATION)
     const addDiscovery = async (discoveryData: Omit<Discovery, 'id' | 'timestamp' | 'dateSaved'>) => {
         try {
             const newDiscovery: Discovery = {
@@ -325,6 +368,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
                     });
 
                     console.log('✓ Discovery synced to cloud');
+
+                    // GAMIFICATION: Check for newly unlocked achievements (NEW)
+                    const newlyUnlocked = await GamificationService.checkAndUnlockAchievements(authUser.id);
+
+                    if (newlyUnlocked.length > 0) {
+                        console.log(`🎉 Unlocked ${newlyUnlocked.length} achievement(s)!`);
+
+                        // Show modal for first unlocked achievement
+                        setUnlockedAchievement(newlyUnlocked[0]);
+
+                        // Refresh gamification data
+                        await refreshGamificationData();
+                    }
+
+                    // GAMIFICATION: Update leaderboards (NEW)
+                    const stats = await GamificationService.getUserStats(authUser.id);
+                    if (stats) {
+                        await GamificationService.updateLeaderboard(
+                            authUser.id,
+                            'all_time_xp',
+                            stats.total_xp
+                        );
+                        await GamificationService.updateLeaderboard(
+                            authUser.id,
+                            'weekly_discoveries',
+                            stats.discoveries_this_week
+                        );
+                        await GamificationService.updateLeaderboard(
+                            authUser.id,
+                            'monthly_xp',
+                            stats.total_xp
+                        );
+                    }
+
                 } catch (cloudError) {
                     console.error('Cloud sync error (discovery still saved locally):', cloudError);
                 }
@@ -437,6 +514,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setUser(DEFAULT_USER);
             setDiscoveries([]);
             setSettings(DEFAULT_SETTINGS);
+
+            // Clear gamification data (NEW)
+            setUserStats(null);
+            setAchievementProgress([]);
+            setUnlockedAchievement(null);
         } catch (error) {
             console.error('Error clearing data:', error);
             throw error;
@@ -460,40 +542,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
             setDiscoveries([]);
             await StorageService.saveDiscoveries([]);
+
+            // Clear gamification data (NEW)
+            setUserStats(null);
+            setAchievementProgress([]);
+            setUnlockedAchievement(null);
         } catch (error) {
             console.error('Error signing out:', error);
             throw error;
         }
     };
 
-    // Create Session - Start new discovery session
+    // Create Session
     const createSession = async (
         imageUri: string,
         objects: DetectedObject[],
         context?: SceneContext
     ): Promise<string> => {
         try {
-            // Synchronous session creation - wait for completion
             const sessionId = await sessionManager.createSession(imageUri, objects, context);
-
-            // Update current session state
             const session = await sessionManager.getSession(sessionId);
             if (session) {
                 setCurrentSession(session);
                 console.log(`✓ Session ${sessionId} created and set as current`);
             }
-
             return sessionId;
         } catch (error) {
             console.error('Error creating session:', error);
-            throw error; // Propagate error instead of returning temp ID
+            throw error;
         }
     };
 
-    // Get Session - Retrieve session by ID
+    // Get Session
     const getSession = (sessionId: string): DiscoverySessionState | null => {
-        // This will be called synchronously, but we need to handle async
-        // For now, return null and trigger async fetch
         sessionManager.getSession(sessionId).then(session => {
             if (session) {
                 setCurrentSession(session);
@@ -505,7 +586,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Mark Object as Explored
     const markObjectAsExplored = (sessionId: string, objectId: string): void => {
         sessionManager.markObjectAsExplored(sessionId, objectId).then(() => {
-            // Refresh current session
             sessionManager.getSession(sessionId).then(session => {
                 if (session) {
                     setCurrentSession(session);
@@ -517,6 +597,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Clear Expired Sessions
     const clearExpiredSessions = (): void => {
         sessionManager.cleanupExpiredSessions();
+    };
+
+    // Start Learning Session (NEW)
+    const startLearningSession = async (
+        sessionType: 'single_discovery' | 'batch_discovery' | 'museum_review'
+    ): Promise<string | null> => {
+        if (authUser && !user.isGuest) {
+            const sessionId = await GamificationService.startLearningSession(authUser.id, sessionType);
+            setActiveSessionId(sessionId);
+            return sessionId;
+        }
+        return null;
+    };
+
+    // End Learning Session (NEW)
+    const endLearningSession = async (
+        objectsExplored: number,
+        primaryCategory: string | null
+    ): Promise<void> => {
+        if (authUser && !user.isGuest && activeSessionId) {
+            await GamificationService.endLearningSession(activeSessionId, objectsExplored, primaryCategory);
+            setActiveSessionId(null);
+        }
     };
 
     // CONTEXT VALUE
@@ -531,7 +634,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         removeDiscovery,
         getDiscoveryById,
 
-        // Sessions (NEW)
+        // Sessions
         currentSession,
         createSession,
         getSession,
@@ -554,6 +657,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
         isFirstLaunch,
         isOnline,
         syncStatus,
+
+        // Gamification (NEW)
+        userStats,
+        achievementProgress,
+        refreshGamificationData,
+        checkAchievements,
+
+        // Session Tracking (NEW)
+        startLearningSession,
+        endLearningSession,
+
+        // Achievement Modal (NEW)
+        unlockedAchievement,
+        setUnlockedAchievement,
     };
 
     return (

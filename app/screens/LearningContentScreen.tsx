@@ -32,6 +32,7 @@ export default function LearningContentScreen() {
     const navigation = useNavigation<NavigationProp>();
 
     // Session states
+    const { startLearningSession, endLearningSession } = useApp();
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [sceneContext, setSceneContext] = useState<SceneContext | null>(null);
     const [hasMoreObjects, setHasMoreObjects] = useState(false);
@@ -69,6 +70,23 @@ export default function LearningContentScreen() {
     const fadeAnim = useRef(new Animated.Value(1)).current;
     const slideAnim = useRef(new Animated.Value(0)).current;
     const scrollViewRef = useRef<ScrollView>(null);
+
+    // Start session when screen mounts
+    useEffect(() => {
+        const initSession = async () => {
+            const id = await startLearningSession('single_discovery');
+            setSessionId(id);
+        };
+
+        initSession();
+
+        // Cleanup: end session when leaving screen
+        return () => {
+            if (sessionId) {
+                endLearningSession(1, result.category);
+            }
+        };
+    }, []);
 
     // Check if from Museum
     useEffect(() => {
