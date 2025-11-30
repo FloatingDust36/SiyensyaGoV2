@@ -88,13 +88,76 @@ export const GamificationService = {
 
     async getAchievementProgress(userId: string): Promise<AchievementProgress[]> {
         try {
-            const { data, error } = await supabase
-                .rpc('get_achievement_progress', { user_uuid: userId });
-
-            if (error) throw error;
-            return data || [];
+            const [achievements, stats, userAchievementsResult] = await Promise.all([
+                this.getAllAchievements(),
+                this.getUserStats(userId),
+                supabase.from('user_achievements').select('achievement_id').eq('user_id', userId)
+            ]);
+    
+            if (!stats) {
+                console.error("Could not fetch user stats, cannot calculate achievement progress.");
+                return [];
+            }
+    
+            if (userAchievementsResult.error) {
+                console.error("Error fetching user achievements:", userAchievementsResult.error);
+                // Decide if you want to return [] or throw the error
+                return [];
+            }
+    
+            const unlockedAchievementIds = new Set(userAchievementsResult.data?.map(ua => ua.achievement_id) || []);
+    
+            const progressList: AchievementProgress[] = achievements.map(achievement => {
+                const isUnlocked = unlockedAchievementIds.has(achievement.id);
+    
+                let currentProgress = 0;
+                // Determine current progress based on the achievement's requirement type
+                switch (achievement.requirement_type) {
+                    case 'discovery_count':
+                        currentProgress = stats.total_discoveries;
+                        break;
+                    case 'streak':
+                        currentProgress = stats.current_streak;
+                        break;
+                    case 'category_mastery':
+                        if (achievement.category && stats.category_counts) {
+                            const categoryCounts = stats.category_counts as Record<string, number>;
+                            currentProgress = categoryCounts[achievement.category] || 0;
+                        }
+                        break;
+                    case 'time_based':
+                        // Assuming time_based requirement is in minutes
+                        currentProgress = stats.total_learning_time_minutes;
+                        break;
+                }
+    
+                // If an achievement is unlocked, its progress is considered complete.
+                // Otherwise, use the calculated current progress, capped at the requirement value.
+                const finalProgress = isUnlocked ? achievement.requirement_value : Math.min(currentProgress, achievement.requirement_value);
+                
+                // Calculate the progress percentage, ensuring it doesn't exceed 100%
+                const progressPercentage = achievement.requirement_value > 0 
+                    ? Math.min(100, (finalProgress / achievement.requirement_value) * 100)
+                    : isUnlocked ? 100 : 0;
+    
+                return {
+                    achievement_key: achievement.achievement_key,
+                    name: achievement.name,
+                    description: achievement.description,
+                    icon_name: achievement.icon_name,
+                    color: achievement.color,
+                    tier: achievement.tier,
+                    is_unlocked: isUnlocked,
+                    current_progress: finalProgress,
+                    requirement_value: achievement.requirement_value,
+                    progress_percentage: progressPercentage,
+                };
+            });
+    
+            return progressList;
+    
         } catch (error) {
-            console.error('Error fetching achievement progress:', error);
+            console.error('Error calculating achievement progress:', error);
             return [];
         }
     },
@@ -397,14 +460,73 @@ export const GamificationService = {
         limit: number = 100
     ): Promise<LeaderboardEntry[]> {
         try {
-            const { data, error } = await supabase.rpc('get_leaderboard', {
-                board_type: type,
-                board_period: period,
-                limit_count: limit
-            });
+            // Get current user ID
+            const { data: { user: currentUser } } = await supabase.auth.getUser();
+            const currentUserId = currentUser?.id;
 
-            if (error) throw error;
-            return data || [];
+            // Workaround: Query leaderboard_entries directly instead of using RPC
+            // to avoid enum type casting issues in the database function
+            
+            // Calculate period_key based on period
+            const periodKey =
+                period === 'weekly'
+                    ? new Date().toISOString().slice(0, 10).replace(/-/g, '') + 'W'
+                    : period === 'monthly'
+                        ? new Date().toISOString().slice(0, 7)
+                        : 'all_time';
+
+            // Query leaderboard entries (without join to avoid syntax issues)
+            const { data: entriesData, error: entriesError } = await supabase
+                .from('leaderboard_entries')
+                .select('user_id, score')
+                .eq('leaderboard_type', type as any) // Cast to any to bypass enum type check
+                .eq('period', period)
+                .eq('period_key', periodKey)
+                .order('score', { ascending: false })
+                .limit(limit);
+
+            if (entriesError) {
+                // If direct query fails, try RPC as fallback (might still fail with enum issue)
+                console.warn('Direct query failed, trying RPC:', entriesError);
+                try {
+                    const { data: rpcData, error: rpcError } = await supabase.rpc('get_leaderboard', {
+                        board_type: type,
+                        board_period: period,
+                        limit_count: limit
+                    });
+
+                    if (rpcError) throw rpcError;
+                    return rpcData || [];
+                } catch (rpcError) {
+                    console.error('RPC also failed:', rpcError);
+                    return [];
+                }
+            }
+
+            if (!entriesData || entriesData.length === 0) {
+                return [];
+            }
+
+            // Fetch user names separately
+            const userIds = entriesData.map(e => e.user_id);
+            const { data: profilesData } = await supabase
+                .from('profiles')
+                .select('id, user_name')
+                .in('id', userIds);
+
+            const profilesMap = new Map(
+                (profilesData || []).map(p => [p.id, p.user_name])
+            );
+
+            // Transform data to LeaderboardEntry format
+            const entries: LeaderboardEntry[] = entriesData.map((entry: any, index: number) => ({
+                rank: index + 1,
+                user_name: profilesMap.get(entry.user_id) || 'Unknown User',
+                score: entry.score || 0,
+                is_current_user: currentUserId ? entry.user_id === currentUserId : false
+            }));
+
+            return entries;
         } catch (error) {
             console.error('Error fetching leaderboard:', error);
             return [];

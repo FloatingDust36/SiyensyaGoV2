@@ -39,45 +39,6 @@ export default function LoginScreen({ navigation }: any) {
         ).start();
     }, []);
 
-    // AUTHENTICATION LISTENER: Handles navigation after successful OAuth or manual login/signup
-    useEffect(() => {
-        setLoading(true);
-        setHasNavigated(false); // Reset on mount
-        
-        // This listener fires whenever the authentication state changes (e.g., after OAuth redirect)
-        const { data: authListener } = supabase.auth.onAuthStateChange(
-            async (event, session) => {
-                console.log('Auth event:', event, 'Session exists:', !!session);
-                
-                if (session && !hasNavigated) {
-                    // User is signed in and we haven't navigated yet
-                    console.log('User authenticated:', session.user.email);
-                    setHasNavigated(true);
-                    // Navigate to GradeLevel for all new logins
-                    // Profile will be created/checked during the onboarding flow
-                    console.log('Navigating to GradeLevel');
-                    // Use a small delay to ensure state is updated
-                    setTimeout(() => {
-                        navigation.replace('GradeLevel');
-                    }, 100);
-                } else if (event === 'SIGNED_OUT') {
-                    // Do nothing, stay on login screen
-                    console.log('User signed out');
-                    setLoading(false);
-                    setHasNavigated(false);
-                } else if (event === 'INITIAL_SESSION') {
-                    // Set loading false only after initial session status is checked
-                    console.log('Initial session checked');
-                    setLoading(false);
-                }
-            }
-        );
-
-        return () => {
-            authListener.subscription.unsubscribe();
-        };
-    }, [navigation]);
-
     const glowColor = glowAnim.interpolate({
         inputRange: [0, 1],
         outputRange: ['rgba(0, 191, 255, 0.1)', 'rgba(0, 191, 255, 0.3)'],

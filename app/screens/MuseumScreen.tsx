@@ -1,11 +1,11 @@
 // In app/screens/MuseumScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, Dimensions, ActivityIndicator } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { colors, fonts } from '../theme/theme';
 import { useApp } from '../context/AppContext';
 
@@ -22,10 +22,35 @@ const CATEGORIES = [
 ];
 
 export default function MuseumScreen() {
-    const { discoveries, syncStatus } = useApp();
+    const { discoveries, syncStatus, syncDiscoveries, user, isLoading } = useApp();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('all');
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
+    const lastSyncTimeRef = useRef<number>(0);
+    const isSyncingRef = useRef<boolean>(false);
+    const hasInitialSyncedRef = useRef<boolean>(false);
+
+    // Auto-sync only once when component mounts (if user is authenticated)
+    // This prevents infinite loops while still syncing on first load
+    useEffect(() => {
+        if (!user.isGuest && !isLoading && !hasInitialSyncedRef.current) {
+            const now = Date.now();
+            const timeSinceLastSync = now - lastSyncTimeRef.current;
+            const SYNC_COOLDOWN = 1000; // 1 second cooldown
+
+            if (!isSyncingRef.current && timeSinceLastSync > SYNC_COOLDOWN) {
+                isSyncingRef.current = true;
+                hasInitialSyncedRef.current = true;
+                lastSyncTimeRef.current = now;
+                console.log('MuseumScreen mounted, syncing discoveries...');
+                
+                syncDiscoveries().finally(() => {
+                    isSyncingRef.current = false;
+                });
+            }
+        }
+    }, [user.isGuest, isLoading, syncDiscoveries]);
 
     // Filter discoveries based on search and category
     const filteredDiscoveries = discoveries.filter((item) => {
@@ -35,6 +60,22 @@ export default function MuseumScreen() {
     });
 
     const discoveryCount = discoveries.length;
+
+    // Manual refresh handler
+    const handleRefresh = async () => {
+        if (isRefreshing || isSyncingRef.current) return;
+        
+        setIsRefreshing(true);
+        isSyncingRef.current = true;
+        lastSyncTimeRef.current = Date.now();
+        
+        try {
+            await syncDiscoveries();
+        } finally {
+            setIsRefreshing(false);
+            isSyncingRef.current = false;
+        }
+    };
 
     return (
         <SafeAreaView style={styles.container}>
@@ -47,8 +88,16 @@ export default function MuseumScreen() {
                             {discoveryCount} {discoveryCount === 1 ? 'discovery' : 'discoveries'}
                         </Text>
                     </View>
-                    <TouchableOpacity style={styles.statsButton}>
-                        <Ionicons name="stats-chart-outline" size={24} color={colors.primary} />
+                    <TouchableOpacity 
+                        style={styles.statsButton}
+                        onPress={handleRefresh}
+                        disabled={isRefreshing}
+                    >
+                        <Ionicons 
+                            name={isRefreshing ? "refresh" : "refresh-outline"} 
+                            size={24} 
+                            color={colors.primary} 
+                        />
                     </TouchableOpacity>
                 </View>
 
@@ -173,7 +222,7 @@ export default function MuseumScreen() {
                                             {item.category.charAt(0).toUpperCase() + item.category.slice(1)}
                                         </Text>
                                     </View>
-                                    <Text style={styles.cardDate}>{item.dateSaved}</Text>
+                                    <Text style={styles.cardDate}>{new Date(item.dateSaved).toLocaleDateString()}</Text>
                                 </View>
                             </View>
                         </TouchableOpacity>
