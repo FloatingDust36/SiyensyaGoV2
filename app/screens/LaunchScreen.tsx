@@ -86,13 +86,7 @@ export default function LaunchScreen({ navigation }: any) {
                 ])
             ).start();
         });
-
-        const timer = setTimeout(() => {
-            navigation.replace('Login');
-        }, 3000);
-
-        return () => clearTimeout(timer);
-    }, [navigation]);
+    }, []);
 
     const spin = rotateAnim.interpolate({
         inputRange: [0, 1],

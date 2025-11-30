@@ -47,9 +47,12 @@ export default function ProfileScreen() {
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
-        await refreshGamificationData();
-        await loadLevelProgress();
-        setIsRefreshing(false);
+        try {
+            await refreshGamificationData();
+            await loadLevelProgress();
+        } finally {
+            setIsRefreshing(false);
+        }
     };
 
     const handleChangeGradeLevel = () => {

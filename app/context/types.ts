@@ -84,6 +84,7 @@ export type AppContextType = {
     // Actions
     clearAllData: () => Promise<void>;
     signOut: () => Promise<void>;
+    syncDiscoveries: () => Promise<void>;
 
     // Loading state
     isLoading: boolean;

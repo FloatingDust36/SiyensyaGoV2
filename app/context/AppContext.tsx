@@ -176,6 +176,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 };
                 setUser(userData);
                 await StorageService.saveUser(userData);
+                
+                // Still sync discoveries even if profile doesn't exist yet
+                const localDiscoveries = await StorageService.getDiscoveries();
+                setDiscoveries(localDiscoveries);
+                await syncFromCloud(supabaseUser.id);
                 return;
             }
 
@@ -187,6 +192,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             };
             setUser(userData);
             await StorageService.saveUser(userData);
+
+            // Load local discoveries first for a better UX
+            const localDiscoveries = await StorageService.getDiscoveries();
+            setDiscoveries(localDiscoveries);
 
             await syncFromCloud(supabaseUser.id);
             await syncSettingsFromCloud(supabaseUser.id);
@@ -204,6 +213,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
             };
             setUser(userData);
             await StorageService.saveUser(userData);
+            
+            // Still try to load local discoveries and sync from cloud even on error
+            try {
+                const localDiscoveries = await StorageService.getDiscoveries();
+                setDiscoveries(localDiscoveries);
+                await syncFromCloud(supabaseUser.id);
+            } catch (syncError) {
+                console.error('Error syncing discoveries after sign-in error:', syncError);
+            }
         }
     };
 
@@ -211,6 +229,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const handleUserSignOut = async () => {
         setUser(DEFAULT_USER);
         await StorageService.saveUser(DEFAULT_USER);
+        setDiscoveries([]);
 
         // Clear gamification data (NEW)
         setUserStats(null);
@@ -220,11 +239,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // Sync discoveries from cloud
     const syncFromCloud = async (userId: string) => {
-        if (!userId) return;
+        if (!userId) {
+            console.warn('syncFromCloud: No userId provided');
+            return;
+        }
 
         setIsSyncing(true);
         try {
+            console.log(`🔄 Syncing discoveries for user: ${userId}`);
             const cloudDiscoveries = await SupabaseDiscoveries.getDiscoveries(userId);
+            
+            console.log(`📦 Fetched ${cloudDiscoveries?.length || 0} discoveries from cloud`);
+
+            if (!cloudDiscoveries || cloudDiscoveries.length === 0) {
+                console.log('No discoveries found in cloud, checking local storage...');
+                const localDiscoveries = await StorageService.getDiscoveries();
+                setDiscoveries(localDiscoveries);
+                setSyncStatus('No cloud discoveries found');
+                setTimeout(() => setSyncStatus(''), 2000);
+                return;
+            }
 
             const localDiscoveries: Discovery[] = cloudDiscoveries.map((d: any) => ({
                 id: d.id,
@@ -258,6 +292,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setTimeout(() => setSyncStatus(''), 3000);
             const localDiscoveries = await StorageService.getDiscoveries();
             setDiscoveries(localDiscoveries);
+            console.log(`📱 Loaded ${localDiscoveries.length} discoveries from local storage as fallback`);
         } finally {
             setIsSyncing(false);
         }
@@ -622,6 +657,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     };
 
+    // Manual Sync Discoveries (NEW)
+    const syncDiscoveries = React.useCallback(async () => {
+        if (authUser && !user.isGuest) {
+            await syncFromCloud(authUser.id);
+        } else {
+            console.warn('Cannot sync: User is not authenticated');
+            setSyncStatus('Please sign in to sync');
+            setTimeout(() => setSyncStatus(''), 2000);
+        }
+    }, [authUser, user.isGuest]);
+
     // CONTEXT VALUE
     const contextValue: AppContextType = {
         // User
@@ -651,9 +697,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // Actions
         clearAllData,
         signOut,
+        syncDiscoveries,
 
         // State
-        isLoading: isLoading || isSyncing,
+        isLoading: isLoading, // Only initial loading, not syncing
         isFirstLaunch,
         isOnline,
         syncStatus,

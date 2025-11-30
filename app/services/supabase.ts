@@ -262,8 +262,13 @@ export const SupabaseDiscoveries = {
             .eq('user_id', userId)
             .order('created_at', { ascending: false });
 
-        if (error) throw error;
-        return data;
+        if (error) {
+            console.error('Error fetching discoveries:', error);
+            throw error;
+        }
+        
+        // Ensure we always return an array, even if data is null
+        return data || [];
     },
 
     // Add new discovery
