@@ -352,7 +352,8 @@ export default function ProfileScreen() {
                                     style: 'destructive',
                                     onPress: async () => {
                                         await clearAllData();
-                                        Alert.alert('Data Cleared', 'All your data has been removed');
+                                        Alert.alert('Data Cleared', 'All your data has been removed.');
+                                        navigation.navigate('Login' as never);
                                     }
                                 }
                             ])}

@@ -72,7 +72,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             await sessionManager.initialize();
             const cleanedCount = await sessionManager.cleanupExpiredSessions();
             if (cleanedCount > 0) {
-                console.log(`🧹 Cleaned up ${cleanedCount} expired sessions on startup`);
+                console.log(` Cleaned up ${cleanedCount} expired sessions on startup`);
             }
         } catch (error) {
             console.error('Error initializing session manager:', error);
@@ -106,9 +106,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setIsOnline(online);
 
             if (online) {
-                console.log('📡 Back online');
+                console.log(' Back online');
             } else {
-                console.log('📡 Offline');
+                console.log(' Offline');
             }
         });
 
@@ -139,7 +139,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 const newlyUnlocked = await GamificationService.checkAndUnlockAchievements(authUser.id);
 
                 if (newlyUnlocked.length > 0) {
-                    console.log(`🎉 Unlocked ${newlyUnlocked.length} achievements!`);
+                    console.log(` Unlocked ${newlyUnlocked.length} achievements!`);
                     await refreshGamificationData();
                 }
             } catch (error) {
@@ -246,10 +246,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         setIsSyncing(true);
         try {
-            console.log(`🔄 Syncing discoveries for user: ${userId}`);
+           // console.log(` Syncing discoveries for user: ${userId}`);
             const cloudDiscoveries = await SupabaseDiscoveries.getDiscoveries(userId);
             
-            console.log(`📦 Fetched ${cloudDiscoveries?.length || 0} discoveries from cloud`);
+            //console.log(` Fetched ${cloudDiscoveries?.length || 0} discoveries from cloud`);
 
             if (!cloudDiscoveries || cloudDiscoveries.length === 0) {
                 console.log('No discoveries found in cloud, checking local storage...');
@@ -285,14 +285,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setSyncStatus('Sync complete!');
             setTimeout(() => setSyncStatus(''), 2000);
 
-            console.log(`✓ Synced ${localDiscoveries.length} discoveries from cloud`);
+            //console.log(`✓ Synced ${localDiscoveries.length} discoveries from cloud`);
         } catch (error) {
             console.error('Sync from cloud error:', error);
             setSyncStatus('Sync failed');
             setTimeout(() => setSyncStatus(''), 3000);
             const localDiscoveries = await StorageService.getDiscoveries();
             setDiscoveries(localDiscoveries);
-            console.log(`📱 Loaded ${localDiscoveries.length} discoveries from local storage as fallback`);
+            console.log(` Loaded ${localDiscoveries.length} discoveries from local storage as fallback`);
         } finally {
             setIsSyncing(false);
         }
@@ -408,7 +408,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                     const newlyUnlocked = await GamificationService.checkAndUnlockAchievements(authUser.id);
 
                     if (newlyUnlocked.length > 0) {
-                        console.log(`🎉 Unlocked ${newlyUnlocked.length} achievement(s)!`);
+                        console.log(` Unlocked ${newlyUnlocked.length} achievement(s)!`);
 
                         // Show modal for first unlocked achievement
                         setUnlockedAchievement(newlyUnlocked[0]);
