@@ -86,7 +86,7 @@ export default function CameraScreen() {
                 [],
                 { format: ImageManipulator.SaveFormat.JPEG }
             );
-            navigation.navigate('ObjectRecognition', { imageUri: normalized.uri });
+            (navigation as any).navigate('ObjectRecognition', { imageUri: normalized.uri });
         } catch (error) {
             console.error("Error normalizing image:", error);
             Alert.alert("Error", "Could not process image.");

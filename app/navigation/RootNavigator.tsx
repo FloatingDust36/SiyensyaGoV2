@@ -45,6 +45,12 @@ export default function RootNavigator() {
                     <Stack.Screen name="Login" component={LoginScreen} />
                     <Stack.Screen name="GradeLevel" component={GradeLevelScreen} />
                     <Stack.Screen name="MainTabs" component={TabNavigator} />
+                    <Stack.Screen name="ObjectRecognition" component={ObjectRecognitionScreen} />
+                    <Stack.Screen name="ObjectSelection" component={DiscoverySessionScreen} />
+                    <Stack.Screen name="LearningContent" component={LearningContentScreen} />
+                    <Stack.Screen name="SessionSummary" component={SessionSummaryScreen} />
+                    <Stack.Screen name="Achievements" component={AchievementsScreen} />
+                    <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
                 </>
             ) : user.gradeLevel ? (
                 <>

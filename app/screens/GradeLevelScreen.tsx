@@ -120,12 +120,12 @@ export default function GradeLevelScreen() {
             }
 
             console.log('Navigating to MainTabs Camera screen');
-            navigation.replace('MainTabs', { screen: 'Camera' });
+            navigation.replace('MainTabs', { screen: 'Camera' } as never);
         } catch (error) {
             console.error('Error in handleContinue:', error);
             // Still navigate even if there's an error
             console.log('Error occurred but navigating anyway');
-            navigation.replace('MainTabs', { screen: 'Camera' });
+            navigation.replace('MainTabs', { screen: 'Camera' } as never);
         } finally {
             setIsProcessing(false);
         }
@@ -176,11 +176,11 @@ export default function GradeLevelScreen() {
                 // Don't block navigation if profile update fails
             }
 
-            navigation.replace('MainTabs', { screen: 'Camera' });
+            navigation.replace('MainTabs', { screen: 'Camera' } as never);
         } catch (error) {
             console.error('Error in handleSkip:', error);
             // Still navigate even if there's an error
-            navigation.replace('MainTabs', { screen: 'Camera' });
+            navigation.replace('MainTabs', { screen: 'Camera' } as never);
         }
     };
 
