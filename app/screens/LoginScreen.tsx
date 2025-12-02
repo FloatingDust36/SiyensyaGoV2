@@ -1,5 +1,5 @@
 // In app/screens/LoginScreen.tsx
-import React, { useState, useEffect } from 'react'; 
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Animated, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -116,8 +116,24 @@ export default function LoginScreen({ navigation }: any) {
         setLoading(false);
     };
 
-    const handleForgotPassword = () => {
-        Alert.alert('Password Reset', 'Password reset functionality is not implemented yet.');
+    const handleForgotPassword = async () => {
+        if (!email) {
+            Alert.alert('Input Required', 'Please enter your email address to reset your password.');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            await SupabaseAuth.resetPasswordForEmail(email);
+            Alert.alert(
+                'Check your email',
+                'We have sent a password reset link to ' + email
+            );
+        } catch (error: any) {
+            Alert.alert('Error', error.message || 'Failed to send reset email.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     // Handle OAuth login

@@ -43,7 +43,7 @@ export const SupabaseAuth = {
             password,
             options: {
                 data: {
-                    user_name: fullName,
+                    full_name: fullName,
                 },
             },
         });
@@ -87,12 +87,12 @@ export const SupabaseAuth = {
 
             if (result.type === 'success' && result.url) {
                 console.log("OAuth Success URL:", result.url);
-                
+
                 // Manually extract tokens from the deep link URL
                 try {
                     const url = new URL(result.url);
                     const hashParams = new URLSearchParams(url.hash.substring(1));
-                    
+
                     const accessToken = hashParams.get('access_token');
                     const refreshToken = hashParams.get('refresh_token');
                     const expiresIn = hashParams.get('expires_in');
@@ -127,6 +127,15 @@ export const SupabaseAuth = {
         }
     },
 
+    async resetPasswordForEmail(email: string) {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: makeRedirectUri({ scheme: 'siyensyago' }),
+        });
+
+        if (error) throw error;
+        return true;
+    },
+
     // Sign out
     async signOut() {
         const { error } = await supabase.auth.signOut();
@@ -153,7 +162,7 @@ export const SupabaseProfile = {
         try {
             console.log('Starting profile query for user:', userId);
             const startTime = Date.now();
-            
+
             const { data, error } = await supabase
                 .from('profiles')
                 .select('*')
@@ -172,7 +181,7 @@ export const SupabaseProfile = {
                 console.error('Profile query error:', error.code, error.message);
                 throw error;
             }
-            
+
             console.log('Profile found successfully');
             return data;
         } catch (err: any) {
@@ -266,7 +275,7 @@ export const SupabaseDiscoveries = {
             console.error('Error fetching discoveries:', error);
             throw error;
         }
-        
+
         // Ensure we always return an array, even if data is null
         return data || [];
     },
