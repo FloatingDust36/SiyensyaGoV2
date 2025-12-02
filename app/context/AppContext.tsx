@@ -1,6 +1,6 @@
 // app/context/AppContext.tsx
 import NetInfo from '@react-native-community/netinfo';
-import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
+import React, { createContext, useState, useEffect, useContext, ReactNode, useRef } from 'react';
 import { AppContextType, Discovery, UserData, AppSettings, GradeLevel, DiscoverySessionState } from './types';
 import { StorageService } from '../services/storage';
 import { deleteImage } from '../services/imageStorage';
@@ -45,11 +45,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [syncStatus, setSyncStatus] = useState<string>('');
     const [currentSession, setCurrentSession] = useState<DiscoverySessionState | null>(null);
 
-    // Gamification State (NEW)
+    // Gamification State
     const [userStats, setUserStats] = useState<UserStats | null>(null);
     const [achievementProgress, setAchievementProgress] = useState<AchievementProgress[]>([]);
     const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
     const [unlockedAchievement, setUnlockedAchievement] = useState<AchievementProgress | null>(null);
+
+    // Network state tracking to prevent log spam
+    const wasOnline = useRef(true);
 
     // Load data on mount
     useEffect(() => {
@@ -72,7 +75,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             await sessionManager.initialize();
             const cleanedCount = await sessionManager.cleanupExpiredSessions();
             if (cleanedCount > 0) {
-                console.log(` Cleaned up ${cleanedCount} expired sessions on startup`);
+                console.log(`🧹 Cleaned up ${cleanedCount} expired sessions on startup`);
             }
         } catch (error) {
             console.error('Error initializing session manager:', error);
@@ -83,14 +86,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const setupAuthListener = () => {
         const { data: authListener } = supabase.auth.onAuthStateChange(
             async (event, session) => {
-                console.log('Auth event:', event);
-                setAuthUser(session?.user ?? null);
+                console.log(`🔐 Auth event: ${event}`);
 
-                if (event === 'SIGNED_IN' && session?.user) {
-                    await handleUserSignIn(session.user);
+                // Update auth user state
+                if (session?.user) {
+                    setAuthUser(session.user);
+                } else {
+                    setAuthUser(null);
+                }
+
+                // Handle specific events
+                if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+                    if (session?.user) {
+                        await handleUserSignIn(session.user);
+                    }
                 } else if (event === 'SIGNED_OUT') {
                     await handleUserSignOut();
+                } else if (event === 'TOKEN_REFRESHED') {
+                    console.log('✨ Token refreshed');
                 }
+
+                // Stop loading once the auth system has checked the session
+                setIsLoading(false);
             }
         );
 
@@ -103,19 +120,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const setupNetworkListener = () => {
         const unsubscribe = NetInfo.addEventListener(state => {
             const online = state.isConnected ?? false;
-            setIsOnline(online);
 
-            if (online) {
-                console.log(' Back online');
-            } else {
-                console.log(' Offline');
+            // Only log and update if the state actually CHANGED
+            if (online !== wasOnline.current) {
+                setIsOnline(online);
+                if (online) {
+                    console.log('✅ Connection restored');
+                    // Trigger a sync when coming back online if we have a user
+                    if (authUser) syncFromCloud(authUser.id);
+                } else {
+                    console.log('⚠️ Offline mode');
+                }
+                wasOnline.current = online;
             }
         });
 
         return unsubscribe;
     };
 
-    // Refresh Gamification Data (NEW)
+    // Refresh Gamification Data
     const refreshGamificationData = async () => {
         if (authUser && !user.isGuest) {
             try {
@@ -132,14 +155,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    // Check Achievements (NEW)
+    // Check Achievements
     const checkAchievements = async () => {
         if (authUser && !user.isGuest) {
             try {
                 const newlyUnlocked = await GamificationService.checkAndUnlockAchievements(authUser.id);
 
                 if (newlyUnlocked.length > 0) {
-                    console.log(` Unlocked ${newlyUnlocked.length} achievements!`);
+                    console.log(`🏆 Unlocked ${newlyUnlocked.length} achievements!`);
                     await refreshGamificationData();
                 }
             } catch (error) {
@@ -170,13 +193,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 console.log('No profile found for new user, creating default');
                 const userData: UserData = {
                     isGuest: false,
-                    userName: supabaseUser.email?.split('@')[0] || 'User',
+                    userName: supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'User',
                     email: supabaseUser.email,
                     gradeLevel: 'elementary',
                 };
                 setUser(userData);
                 await StorageService.saveUser(userData);
-                
+
                 // Still sync discoveries even if profile doesn't exist yet
                 const localDiscoveries = await StorageService.getDiscoveries();
                 setDiscoveries(localDiscoveries);
@@ -200,7 +223,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             await syncFromCloud(supabaseUser.id);
             await syncSettingsFromCloud(supabaseUser.id);
 
-            // Load gamification data (NEW)
+            // Load gamification data
             await refreshGamificationData();
 
         } catch (error) {
@@ -213,7 +236,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             };
             setUser(userData);
             await StorageService.saveUser(userData);
-            
+
             // Still try to load local discoveries and sync from cloud even on error
             try {
                 const localDiscoveries = await StorageService.getDiscoveries();
@@ -231,7 +254,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await StorageService.saveUser(DEFAULT_USER);
         setDiscoveries([]);
 
-        // Clear gamification data (NEW)
+        // Clear gamification data
         setUserStats(null);
         setAchievementProgress([]);
         setUnlockedAchievement(null);
@@ -246,13 +269,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         setIsSyncing(true);
         try {
-           // console.log(` Syncing discoveries for user: ${userId}`);
             const cloudDiscoveries = await SupabaseDiscoveries.getDiscoveries(userId);
-            
-            //console.log(` Fetched ${cloudDiscoveries?.length || 0} discoveries from cloud`);
 
             if (!cloudDiscoveries || cloudDiscoveries.length === 0) {
-                console.log('No discoveries found in cloud, checking local storage...');
                 const localDiscoveries = await StorageService.getDiscoveries();
                 setDiscoveries(localDiscoveries);
                 setSyncStatus('No cloud discoveries found');
@@ -285,14 +304,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setSyncStatus('Sync complete!');
             setTimeout(() => setSyncStatus(''), 2000);
 
-            //console.log(`✓ Synced ${localDiscoveries.length} discoveries from cloud`);
         } catch (error) {
             console.error('Sync from cloud error:', error);
             setSyncStatus('Sync failed');
             setTimeout(() => setSyncStatus(''), 3000);
             const localDiscoveries = await StorageService.getDiscoveries();
             setDiscoveries(localDiscoveries);
-            console.log(` Loaded ${localDiscoveries.length} discoveries from local storage as fallback`);
         } finally {
             setIsSyncing(false);
         }
@@ -317,33 +334,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Load initial data
     const loadInitialData = async () => {
         try {
-            setIsLoading(true);
+            // NOTE: We do NOT call SupabaseAuth.getSession() here anymore.
+            // The setupAuthListener will fire 'INITIAL_SESSION' automatically.
+            // This prevents the race condition and "Invalid Refresh Token" error.
 
-            const session = await SupabaseAuth.getSession();
+            const savedUser = await StorageService.getUser();
+            if (savedUser) {
+                // Pre-fill user state from local storage for instant UI rendering
+                // The auth listener will override this if a session exists
+                if (!authUser) setUser(savedUser);
+            }
 
-            if (session) {
-                setAuthUser(session.user);
-                await handleUserSignIn(session.user);
-                setIsFirstLaunch(false);
-            } else {
-                const savedUser = await StorageService.getUser();
-                if (savedUser) {
-                    setUser(savedUser);
-                    setIsFirstLaunch(false);
-                }
+            const savedDiscoveries = await StorageService.getDiscoveries();
+            setDiscoveries(savedDiscoveries);
 
-                const savedDiscoveries = await StorageService.getDiscoveries();
-                setDiscoveries(savedDiscoveries);
-
-                const savedSettings = await StorageService.getSettings();
-                if (savedSettings) {
-                    setSettings(savedSettings);
-                }
+            const savedSettings = await StorageService.getSettings();
+            if (savedSettings) {
+                setSettings(savedSettings);
             }
         } catch (error) {
-            console.error('Error loading initial data:', error);
-        } finally {
-            setIsLoading(false);
+            console.error('Error loading local data:', error);
+            setIsLoading(false); // Safety net
         }
     };
 
@@ -366,7 +377,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    // Add Discovery (WITH GAMIFICATION)
+    // Add Discovery
     const addDiscovery = async (discoveryData: Omit<Discovery, 'id' | 'timestamp' | 'dateSaved'>) => {
         try {
             const newDiscovery: Discovery = {
@@ -404,37 +415,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
                     console.log('✓ Discovery synced to cloud');
 
-                    // GAMIFICATION: Check for newly unlocked achievements (NEW)
+                    // Check for newly unlocked achievements
                     const newlyUnlocked = await GamificationService.checkAndUnlockAchievements(authUser.id);
 
                     if (newlyUnlocked.length > 0) {
-                        console.log(` Unlocked ${newlyUnlocked.length} achievement(s)!`);
-
-                        // Show modal for first unlocked achievement
+                        console.log(`🏆 Unlocked ${newlyUnlocked.length} achievement(s)!`);
                         setUnlockedAchievement(newlyUnlocked[0]);
-
-                        // Refresh gamification data
                         await refreshGamificationData();
                     }
 
-                    // GAMIFICATION: Update leaderboards (NEW)
+                    // Update leaderboards
                     const stats = await GamificationService.getUserStats(authUser.id);
                     if (stats) {
-                        await GamificationService.updateLeaderboard(
-                            authUser.id,
-                            'all_time_xp',
-                            stats.total_xp
-                        );
-                        await GamificationService.updateLeaderboard(
-                            authUser.id,
-                            'weekly_discoveries',
-                            stats.discoveries_this_week
-                        );
-                        await GamificationService.updateLeaderboard(
-                            authUser.id,
-                            'monthly_xp',
-                            stats.total_xp
-                        );
+                        await GamificationService.updateLeaderboard(authUser.id, 'all_time_xp', stats.total_xp);
+                        await GamificationService.updateLeaderboard(authUser.id, 'weekly_discoveries', stats.discoveries_this_week);
+                        await GamificationService.updateLeaderboard(authUser.id, 'monthly_xp', stats.total_xp);
                     }
 
                 } catch (cloudError) {
@@ -550,7 +545,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setDiscoveries([]);
             setSettings(DEFAULT_SETTINGS);
 
-            // Clear gamification data (NEW)
+            // Clear gamification data
             setUserStats(null);
             setAchievementProgress([]);
             setUnlockedAchievement(null);
@@ -578,7 +573,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setDiscoveries([]);
             await StorageService.saveDiscoveries([]);
 
-            // Clear gamification data (NEW)
+            // Clear gamification data
             setUserStats(null);
             setAchievementProgress([]);
             setUnlockedAchievement(null);
@@ -634,7 +629,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sessionManager.cleanupExpiredSessions();
     };
 
-    // Start Learning Session (NEW)
+    // Start Learning Session
     const startLearningSession = async (
         sessionType: 'single_discovery' | 'batch_discovery' | 'museum_review'
     ): Promise<string | null> => {
@@ -646,7 +641,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return null;
     };
 
-    // End Learning Session (NEW)
+    // End Learning Session
     const endLearningSession = async (
         objectsExplored: number,
         primaryCategory: string | null
@@ -657,7 +652,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    // Manual Sync Discoveries (NEW)
+    // Manual Sync Discoveries
     const syncDiscoveries = React.useCallback(async () => {
         if (authUser && !user.isGuest) {
             await syncFromCloud(authUser.id);
@@ -700,22 +695,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         syncDiscoveries,
 
         // State
-        isLoading: isLoading, // Only initial loading, not syncing
+        isLoading: isLoading,
         isFirstLaunch,
         isOnline,
         syncStatus,
 
-        // Gamification (NEW)
+        // Gamification
         userStats,
         achievementProgress,
         refreshGamificationData,
         checkAchievements,
 
-        // Session Tracking (NEW)
+        // Session Tracking
         startLearningSession,
         endLearningSession,
 
-        // Achievement Modal (NEW)
+        // Achievement Modal
         unlockedAchievement,
         setUnlockedAchievement,
     };
