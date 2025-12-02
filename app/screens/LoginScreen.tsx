@@ -1,6 +1,6 @@
 // In app/screens/LoginScreen.tsx
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Animated, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Animated, KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts } from '../theme/theme';
@@ -300,10 +300,14 @@ export default function LoginScreen({ navigation }: any) {
 
                     {/* Action button with dynamic text */}
                     <View style={styles.actions}>
-                        <TouchableOpacity style={styles.mainButton} onPress={handleAuth} disabled={loading}>
-                            <Text style={styles.mainButtonText}>
-                                {loading && !isSignUp ? 'Signing In...' : (isSignUp ? 'Create Account' : 'Sign In')}
-                            </Text>
+                        <TouchableOpacity style={[styles.mainButton, loading && { opacity: 0.8 }]} onPress={handleAuth} disabled={loading}>
+                            {loading ? (
+                                <ActivityIndicator size="small" color={colors.background} />
+                            ) : (
+                                <Text style={styles.mainButtonText}>
+                                    {isSignUp ? 'Create Account' : 'Sign In'}
+                                </Text>
+                            )}
                         </TouchableOpacity>
 
                         {/* Toggle mode button */}
@@ -330,7 +334,7 @@ export default function LoginScreen({ navigation }: any) {
                         >
                             <Ionicons name="logo-google" size={24} color={colors.text} />
                         </TouchableOpacity>
-                        <TouchableOpacity
+                        { /*<TouchableOpacity
                             style={styles.socialButton}
                             onPress={() => handleSocialLogin('facebook')}
                             disabled={loading}
