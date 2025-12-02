@@ -21,6 +21,7 @@ const DEFAULT_USER: UserData = {
     isGuest: true,
     userName: 'Guest Explorer',
     gradeLevel: 'juniorHigh',
+    hasCompletedOnboarding: false,
 };
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -98,7 +99,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 // Handle specific events
                 if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
                     if (session?.user) {
-                        await handleUserSignIn(session.user);
+                        // FIX: Check if session is actually expired to prevent "zombie" sessions
+                        const now = Math.floor(Date.now() / 1000);
+                        if (session.expires_at && session.expires_at < now) {
+                            console.log('⚠️ Session expired, forcing sign out');
+                            await handleUserSignOut();
+                        } else {
+                            await handleUserSignIn(session.user);
+                        }
                     }
                 } else if (event === 'SIGNED_OUT') {
                     await handleUserSignOut();
@@ -212,6 +220,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 userName: profile.user_name,
                 email: supabaseUser.email,
                 gradeLevel: profile.grade_level as GradeLevel,
+                hasCompletedOnboarding: profile.has_completed_onboarding,
             };
             setUser(userData);
             await StorageService.saveUser(userData);
@@ -369,6 +378,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 await SupabaseProfile.updateProfile(authUser.id, {
                     user_name: updatedUser.userName,
                     grade_level: updatedUser.gradeLevel,
+                    has_completed_onboarding: updatedUser.hasCompletedOnboarding,
                 });
             }
         } catch (error) {

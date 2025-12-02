@@ -9,6 +9,7 @@ export type UserData = {
     userName: string;
     email?: string;
     gradeLevel: GradeLevel;
+    hasCompletedOnboarding?: boolean;
 };
 
 export type AppSettings = {

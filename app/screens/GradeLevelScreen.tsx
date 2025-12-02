@@ -69,13 +69,16 @@ export default function GradeLevelScreen() {
         setIsProcessing(true);
         try {
             console.log('Starting grade level update for:', selectedLevel);
-            
+
             // Wrap updateUser with timeout to prevent hanging
-            const updateUserPromise = updateUser({ gradeLevel: selectedLevel });
-            const timeoutPromise = new Promise((_, reject) => 
+            const updateUserPromise = updateUser({
+                gradeLevel: selectedLevel,
+                hasCompletedOnboarding: true
+            });
+            const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Update user timeout')), 3000)
             );
-            
+
             try {
                 await Promise.race([updateUserPromise, timeoutPromise]);
                 console.log('User updated successfully');
@@ -88,13 +91,13 @@ export default function GradeLevelScreen() {
             try {
                 console.log('Attempting to update Supabase profile');
                 const { SupabaseProfile, SupabaseAuth } = require('../services/supabase');
-                
+
                 // Timeout for getting session
                 const getSessionPromise = SupabaseAuth.getSession();
-                const sessionTimeoutPromise = new Promise((resolve) => 
+                const sessionTimeoutPromise = new Promise((resolve) =>
                     setTimeout(() => resolve(null), 1000)
                 );
-                
+
                 const session = await Promise.race([getSessionPromise, sessionTimeoutPromise]);
                 console.log('Got session:', !!session);
 
@@ -104,11 +107,11 @@ export default function GradeLevelScreen() {
                         grade_level: selectedLevel,
                         has_completed_onboarding: true,
                     });
-                    
-                    const profileTimeoutPromise = new Promise((resolve) => 
+
+                    const profileTimeoutPromise = new Promise((resolve) =>
                         setTimeout(() => resolve(null), 2000)
                     );
-                    
+
                     await Promise.race([updatePromise, profileTimeoutPromise]);
                     console.log('Profile updated successfully');
                 } else {
@@ -134,11 +137,14 @@ export default function GradeLevelScreen() {
     const handleSkip = async () => {
         try {
             // Wrap updateUser with timeout
-            const updateUserPromise = updateUser({ gradeLevel: 'juniorHigh' });
-            const timeoutPromise = new Promise((_, reject) => 
+            const updateUserPromise = updateUser({
+                gradeLevel: 'juniorHigh',
+                hasCompletedOnboarding: true
+            });
+            const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Update user timeout')), 3000)
             );
-            
+
             try {
                 await Promise.race([updateUserPromise, timeoutPromise]);
             } catch (updateError) {
@@ -150,24 +156,24 @@ export default function GradeLevelScreen() {
             try {
                 console.log('Attempting to update Supabase profile (skip)');
                 const { SupabaseProfile, SupabaseAuth } = require('../services/supabase');
-                
+
                 // Timeout for getting session
                 const getSessionPromise = SupabaseAuth.getSession();
-                const sessionTimeoutPromise = new Promise((resolve) => 
+                const sessionTimeoutPromise = new Promise((resolve) =>
                     setTimeout(() => resolve(null), 1000)
                 );
-                
+
                 const session = await Promise.race([getSessionPromise, sessionTimeoutPromise]);
 
                 if (session?.user) {
                     const updatePromise = SupabaseProfile.updateProfile(session.user.id, {
                         has_completed_onboarding: true,
                     });
-                    
-                    const profileTimeoutPromise = new Promise((resolve) => 
+
+                    const profileTimeoutPromise = new Promise((resolve) =>
                         setTimeout(() => resolve(null), 2000)
                     );
-                    
+
                     await Promise.race([updatePromise, profileTimeoutPromise]);
                     console.log('Profile updated successfully (skip)');
                 }
