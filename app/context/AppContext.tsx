@@ -300,11 +300,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 tryThis: d.try_this,
                 explore_further: d.explore_further,
                 timestamp: new Date(d.created_at).getTime(),
-                dateSaved: new Date(d.created_at).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric'
-                }),
+                dateSaved: new Date(d.created_at).toISOString(),
             }));
 
             setDiscoveries(localDiscoveries);
@@ -394,11 +390,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 ...discoveryData,
                 id: `discovery_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                 timestamp: Date.now(),
-                dateSaved: new Date().toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric'
-                }),
+                dateSaved: new Date().toISOString(),
             };
 
             await StorageService.addDiscovery(newDiscovery);
