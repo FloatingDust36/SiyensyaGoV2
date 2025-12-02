@@ -4,7 +4,9 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, Animated, Keyboard
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts } from '../theme/theme';
-import { SupabaseAuth, supabase, SupabaseProfile } from '../services/supabase'; // IMPORTED supabase and SupabaseProfile
+import { SupabaseAuth, supabase, SupabaseProfile } from '../services/supabase';
+import OTPModal from '../components/OTPModal';
+import ChangePasswordModal from '../components/ChangePasswordModal';
 
 export default function LoginScreen({ navigation }: any) {
     const [isSignUp, setIsSignUp] = useState(false);
@@ -16,6 +18,9 @@ export default function LoginScreen({ navigation }: any) {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [loading, setLoading] = useState(false); // New loading state for buttons
     const [hasNavigated, setHasNavigated] = useState(false); // Prevent duplicate navigation
+    const [otpVisible, setOtpVisible] = useState(false);
+    const [otpType, setOtpType] = useState<'signup' | 'recovery'>('signup');
+    const [changePasswordVisible, setChangePasswordVisible] = useState(false);
 
     // Animation values
     const slideAnim = React.useRef(new Animated.Value(0)).current;
@@ -84,11 +89,8 @@ export default function LoginScreen({ navigation }: any) {
                 const result = await SupabaseAuth.signUp(email, password, fullName);
 
                 if (result.user && !result.session) {
-                    // New user, needs email verification. Stay on screen, listener won't fire.
-                    Alert.alert(
-                        'Success!',
-                        'Account created! Please check your email to verify your account before signing in.'
-                    );
+                    setOtpType('signup');
+                    setOtpVisible(true);
                 } else if (result.session) {
                     // Session established (either confirmed or email verification disabled)
                     // The useEffect listener handles navigation.
@@ -125,10 +127,8 @@ export default function LoginScreen({ navigation }: any) {
         setLoading(true);
         try {
             await SupabaseAuth.resetPasswordForEmail(email);
-            Alert.alert(
-                'Check your email',
-                'We have sent a password reset link to ' + email
-            );
+            setOtpType('recovery');
+            setOtpVisible(true);
         } catch (error: any) {
             Alert.alert('Error', error.message || 'Failed to send reset email.');
         } finally {
@@ -156,6 +156,34 @@ export default function LoginScreen({ navigation }: any) {
 
     const handleGuest = () => {
         navigation.replace('GradeLevel');
+    };
+
+    const handleVerifyOtp = async (code: string) => {
+        try {
+            await SupabaseAuth.verifyOtp(email, code, otpType);
+            setOtpVisible(false);
+
+            if (otpType === 'recovery') {
+                // Show change password modal after a brief delay
+                setTimeout(() => {
+                    setChangePasswordVisible(true);
+                }, 500);
+            } else {
+                Alert.alert('Success', 'Email verified! You are logged in.');
+            }
+        } catch (error: any) {
+            Alert.alert('Verification Failed', error.message || 'Invalid code');
+        }
+    };
+
+    const handleChangePassword = async (newPassword: string) => {
+        try {
+            await SupabaseAuth.updatePassword(newPassword);
+            setChangePasswordVisible(false);
+            Alert.alert('Success', 'Password updated successfully!');
+        } catch (error: any) {
+            Alert.alert('Update Failed', error.message || 'Could not update password');
+        }
     };
 
     return (
@@ -325,6 +353,18 @@ export default function LoginScreen({ navigation }: any) {
                             <Ionicons name="arrow-forward" size={20} color={colors.primary} />
                         </TouchableOpacity>
                     </View>
+                    <OTPModal
+                        visible={otpVisible}
+                        email={email}
+                        type={otpType}
+                        onClose={() => setOtpVisible(false)}
+                        onVerify={handleVerifyOtp}
+                    />
+                    <ChangePasswordModal
+                        visible={changePasswordVisible}
+                        onClose={() => setChangePasswordVisible(false)}
+                        onSubmit={handleChangePassword}
+                    />
                 </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>

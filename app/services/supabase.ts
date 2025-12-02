@@ -127,6 +127,26 @@ export const SupabaseAuth = {
         }
     },
 
+    async verifyOtp(email: string, token: string, type: 'signup' | 'recovery') {
+        const { data, error } = await supabase.auth.verifyOtp({
+            email,
+            token,
+            type,
+        });
+
+        if (error) throw error;
+        return data;
+    },
+
+    async updatePassword(newPassword: string) {
+        const { data, error } = await supabase.auth.updateUser({
+            password: newPassword
+        });
+
+        if (error) throw error;
+        return data;
+    },
+
     async resetPasswordForEmail(email: string) {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
             redirectTo: makeRedirectUri({ scheme: 'siyensyago' }),
