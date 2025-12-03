@@ -17,12 +17,20 @@ export default function StatCard({ icon, iconColor, label, value, subtitle, styl
     return (
         <View style={[styles.container, style]}>
             <View style={[styles.iconContainer, { backgroundColor: `${iconColor}20` }]}>
-                <Ionicons name={icon} size={28} color={iconColor} />
+                <Ionicons name={icon} size={24} color={iconColor} />
             </View>
             <View style={styles.content}>
-                <Text style={styles.value}>{value}</Text>
-                <Text style={styles.label}>{label}</Text>
-                {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+                <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
+                    {value}
+                </Text>
+                <Text style={styles.label} numberOfLines={1} adjustsFontSizeToFit>
+                    {label}
+                </Text>
+                {subtitle && (
+                    <Text style={styles.subtitle} numberOfLines={1}>
+                        {subtitle}
+                    </Text>
+                )}
             </View>
         </View>
     );
@@ -32,37 +40,39 @@ const styles = StyleSheet.create({
     container: {
         backgroundColor: '#1A1C2A',
         borderRadius: 15,
-        padding: 16,
+        padding: 12,
         borderWidth: 1,
         borderColor: 'rgba(0, 191, 255, 0.2)',
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        gap: 10,
+        minHeight: 80,
     },
     iconContainer: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
+        width: 48,
+        height: 48,
+        borderRadius: 24,
         justifyContent: 'center',
         alignItems: 'center',
     },
     content: {
         flex: 1,
+        justifyContent: 'center',
     },
     value: {
         fontFamily: fonts.heading,
-        fontSize: 24,
+        fontSize: 20,
         color: colors.text,
         marginBottom: 2,
     },
     label: {
         fontFamily: fonts.body,
-        fontSize: 13,
+        fontSize: 12,
         color: colors.lightGray,
     },
     subtitle: {
         fontFamily: fonts.body,
-        fontSize: 11,
+        fontSize: 10,
         color: colors.primary,
         marginTop: 2,
     },

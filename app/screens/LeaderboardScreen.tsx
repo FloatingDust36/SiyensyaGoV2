@@ -25,8 +25,10 @@ type LeaderboardTab = {
 
 const LEADERBOARD_TABS: LeaderboardTab[] = [
     { key: 'all_time_xp', label: 'All Time XP', icon: 'star' },
-    { key: 'weekly_discoveries', label: 'This Week', icon: 'calendar' },
-    { key: 'monthly_xp', label: 'This Month', icon: 'calendar-outline' },
+    { key: 'all_time_discoveries', label: 'All Time Finds', icon: 'search' },
+    { key: 'weekly_xp', label: 'Weekly XP', icon: 'flash' },
+    { key: 'monthly_xp', label: 'Monthly XP', icon: 'calendar-outline' },
+    { key: 'weekly_discoveries', label: 'Top Hunters (Week)', icon: 'telescope' },
 ];
 
 export default function LeaderboardScreen() {
@@ -45,9 +47,10 @@ export default function LeaderboardScreen() {
     const loadLeaderboard = async () => {
         setIsLoading(true);
         try {
-            const period: LeaderboardPeriod =
-                activeTab === 'weekly_discoveries' ? 'weekly' :
-                    activeTab === 'monthly_xp' ? 'monthly' : 'all_time';
+            // Determine period based on the tab key logic (handled in backend usually, but good to be explicit)
+            let period: LeaderboardPeriod = 'all_time';
+            if (activeTab.includes('weekly')) period = 'weekly';
+            if (activeTab.includes('monthly')) period = 'monthly';
 
             const data = await GamificationService.getLeaderboard(activeTab, period, 100);
             setLeaderboardData(data);
@@ -71,17 +74,13 @@ export default function LeaderboardScreen() {
         return null;
     };
 
+    // If guest, show locked state
     if (user.isGuest) {
         return (
             <SafeAreaView style={styles.container} edges={['top']}>
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => navigation.goBack()}>
-                        <Ionicons name="arrow-back" size={28} color={colors.text} />
-                    </TouchableOpacity>
                     <Text style={styles.headerTitle}>Leaderboard</Text>
-                    <View style={{ width: 28 }} />
                 </View>
-
                 <View style={styles.guestPrompt}>
                     <Ionicons name="podium-outline" size={80} color={colors.lightGray} />
                     <Text style={styles.guestTitle}>Leaderboards Locked</Text>
@@ -103,43 +102,35 @@ export default function LeaderboardScreen() {
         <SafeAreaView style={styles.container} edges={['top']}>
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                    <Ionicons name="arrow-back" size={28} color={colors.text} />
-                </TouchableOpacity>
                 <Text style={styles.headerTitle}>Leaderboard</Text>
-                <TouchableOpacity onPress={handleRefresh} disabled={isRefreshing}>
-                    {isRefreshing ? (
-                        <ActivityIndicator size="small" color={colors.primary} />
-                    ) : (
-                        <Ionicons name="refresh" size={24} color={colors.primary} />
-                    )}
-                </TouchableOpacity>
             </View>
 
             {/* Tabs */}
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.tabContainer}
-                contentContainerStyle={styles.tabContent}
-            >
-                {LEADERBOARD_TABS.map((tab) => (
-                    <TouchableOpacity
-                        key={tab.key}
-                        style={[styles.tab, activeTab === tab.key && styles.tabActive]}
-                        onPress={() => setActiveTab(tab.key)}
-                    >
-                        <Ionicons
-                            name={tab.icon}
-                            size={18}
-                            color={activeTab === tab.key ? colors.background : colors.lightGray}
-                        />
-                        <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
-                            {tab.label}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </ScrollView>
+            <View style={styles.tabWrapper}>
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.tabContainer}
+                    contentContainerStyle={styles.tabContent}
+                >
+                    {LEADERBOARD_TABS.map((tab) => (
+                        <TouchableOpacity
+                            key={tab.key}
+                            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
+                            onPress={() => setActiveTab(tab.key)}
+                        >
+                            <Ionicons
+                                name={tab.icon}
+                                size={16}
+                                color={activeTab === tab.key ? colors.background : colors.lightGray}
+                            />
+                            <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
+                                {tab.label}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+            </View>
 
             {/* Current User Rank */}
             {userStats && (
@@ -158,7 +149,7 @@ export default function LeaderboardScreen() {
                             {activeTab.includes('xp') ? 'XP' : 'Discoveries'}
                         </Text>
                         <Text style={styles.yourRankScoreValue}>
-                            {leaderboardData.find(e => e.is_current_user)?.score || 0}
+                            {leaderboardData.find(e => e.is_current_user)?.score.toLocaleString() || 0}
                         </Text>
                     </View>
                 </View>
@@ -179,7 +170,7 @@ export default function LeaderboardScreen() {
                 {isLoading ? (
                     <View style={styles.loadingContainer}>
                         <ActivityIndicator size="large" color={colors.primary} />
-                        <Text style={styles.loadingText}>Loading leaderboard...</Text>
+                        <Text style={styles.loadingText}>Loading rankings...</Text>
                     </View>
                 ) : leaderboardData.length === 0 ? (
                     <View style={styles.emptyState}>
@@ -249,8 +240,8 @@ export default function LeaderboardScreen() {
                     })
                 )}
 
-                {/* Bottom Padding */}
-                <View style={{ height: 40 }} />
+                {/* Bottom Padding for TabBar */}
+                <View style={{ height: 20 }} />
             </ScrollView>
         </SafeAreaView>
     );
@@ -262,23 +253,27 @@ const styles = StyleSheet.create({
         backgroundColor: colors.background,
     },
     header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
         paddingHorizontal: 20,
         paddingVertical: 15,
+        alignItems: 'center',
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(0, 191, 255, 0.1)',
     },
     headerTitle: {
         fontFamily: fonts.heading,
         fontSize: 24,
         color: colors.text,
     },
+    tabWrapper: {
+        height: 60,
+        justifyContent: 'center',
+    },
     tabContainer: {
-        maxHeight: 50,
-        marginBottom: 15,
+        flexGrow: 0,
     },
     tabContent: {
-        paddingHorizontal: 20,
+        paddingHorizontal: 15,
+        paddingVertical: 10,
         gap: 10,
     },
     tab: {
@@ -309,7 +304,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: 'rgba(0, 191, 255, 0.1)',
         marginHorizontal: 20,
-        marginBottom: 20,
+        marginBottom: 15,
+        marginTop: 5,
         padding: 16,
         borderRadius: 15,
         borderWidth: 2,
@@ -357,6 +353,7 @@ const styles = StyleSheet.create({
     },
     leaderboardContent: {
         paddingHorizontal: 20,
+        paddingTop: 5,
     },
     loadingContainer: {
         alignItems: 'center',
@@ -405,7 +402,7 @@ const styles = StyleSheet.create({
         borderWidth: 2,
     },
     rankContainer: {
-        width: 50,
+        width: 40,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -419,18 +416,19 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,
+        marginLeft: 5,
     },
     userAvatar: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
         backgroundColor: 'rgba(0, 191, 255, 0.2)',
         justifyContent: 'center',
         alignItems: 'center',
     },
     userName: {
         fontFamily: fonts.body,
-        fontSize: 15,
+        fontSize: 14,
         color: colors.text,
         flex: 1,
     },
@@ -444,7 +442,7 @@ const styles = StyleSheet.create({
     },
     scoreValue: {
         fontFamily: fonts.heading,
-        fontSize: 16,
+        fontSize: 15,
         color: colors.text,
     },
     scoreValueHighlight: {
@@ -452,7 +450,7 @@ const styles = StyleSheet.create({
     },
     scoreLabel: {
         fontFamily: fonts.body,
-        fontSize: 11,
+        fontSize: 10,
         color: colors.lightGray,
     },
     guestPrompt: {

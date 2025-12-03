@@ -1,5 +1,5 @@
-// In app/screens/MuseumScreen.tsx
-import React, { useState, useEffect, useRef } from 'react';
+// app/screens/MuseumScreen.tsx
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, Dimensions, ActivityIndicator } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -12,7 +12,6 @@ import { useApp } from '../context/AppContext';
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 60) / 2;
 
-// Category filters
 const CATEGORIES = [
     { id: 'all', name: 'All', icon: 'grid-outline' },
     { id: 'physics', name: 'Physics', icon: 'nuclear-outline' },
@@ -22,37 +21,19 @@ const CATEGORIES = [
 ];
 
 export default function MuseumScreen() {
-    const { discoveries, syncStatus, syncDiscoveries, user, isLoading } = useApp();
+    const { discoveries, syncStatus, syncDiscoveries, user } = useApp();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('all');
-    const [isRefreshing, setIsRefreshing] = useState(false);
     const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
-    const lastSyncTimeRef = useRef<number>(0);
-    const isSyncingRef = useRef<boolean>(false);
-    const hasInitialSyncedRef = useRef<boolean>(false);
 
-    // Auto-sync only once when component mounts (if user is authenticated)
-    // This prevents infinite loops while still syncing on first load
-    useEffect(() => {
-        if (!user.isGuest && !isLoading && !hasInitialSyncedRef.current) {
-            const now = Date.now();
-            const timeSinceLastSync = now - lastSyncTimeRef.current;
-            const SYNC_COOLDOWN = 1000; // 1 second cooldown
-
-            if (!isSyncingRef.current && timeSinceLastSync > SYNC_COOLDOWN) {
-                isSyncingRef.current = true;
-                hasInitialSyncedRef.current = true;
-                lastSyncTimeRef.current = now;
-                console.log('MuseumScreen mounted, syncing discoveries...');
-                
-                syncDiscoveries().finally(() => {
-                    isSyncingRef.current = false;
-                });
+    useFocusEffect(
+        useCallback(() => {
+            if (!user.isGuest) {
+                syncDiscoveries();
             }
-        }
-    }, [user.isGuest, isLoading, syncDiscoveries]);
+        }, [user.isGuest, syncDiscoveries])
+    );
 
-    // Filter discoveries based on search and category
     const filteredDiscoveries = discoveries.filter((item) => {
         const matchesSearch = item.objectName.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesCategory = selectedCategory === 'all' || item.category.toLowerCase() === selectedCategory;
@@ -61,47 +42,25 @@ export default function MuseumScreen() {
 
     const discoveryCount = discoveries.length;
 
-    // Manual refresh handler
-    const handleRefresh = async () => {
-        if (isRefreshing || isSyncingRef.current) return;
-        
-        setIsRefreshing(true);
-        isSyncingRef.current = true;
-        lastSyncTimeRef.current = Date.now();
-        
-        try {
-            await syncDiscoveries();
-        } finally {
-            setIsRefreshing(false);
-            isSyncingRef.current = false;
-        }
-    };
-
     return (
-        <SafeAreaView style={styles.container}>
-            {/* Header */}
+        <SafeAreaView style={styles.container} edges={['top']}>
             <View style={styles.header}>
                 <View style={styles.headerTop}>
                     <View>
                         <Text style={styles.title}>My STEM Museum</Text>
                         <Text style={styles.subtitle}>
-                            {discoveryCount} {discoveryCount === 1 ? 'discovery' : 'discoveries'}
+                            {discoveryCount} {discoveryCount === 1 ? 'discovery' : 'discoveries'} collected
                         </Text>
                     </View>
-                    <TouchableOpacity 
-                        style={styles.statsButton}
-                        onPress={handleRefresh}
-                        disabled={isRefreshing}
-                    >
-                        <Ionicons 
-                            name={isRefreshing ? "refresh" : "refresh-outline"} 
-                            size={24} 
-                            color={colors.primary} 
-                        />
-                    </TouchableOpacity>
+                    {syncStatus ? (
+                        <View style={styles.syncBadge}>
+                            <ActivityIndicator size="small" color={colors.primary} />
+                        </View>
+                    ) : (
+                        <Ionicons name="cloud-done-outline" size={24} color={colors.success} style={{ opacity: 0.7 }} />
+                    )}
                 </View>
 
-                {/* Search Bar */}
                 <View style={styles.searchContainer}>
                     <Ionicons name="search-outline" size={20} color={colors.lightGray} style={styles.searchIcon} />
                     <TextInput
@@ -118,7 +77,6 @@ export default function MuseumScreen() {
                     )}
                 </View>
 
-                {/* Category Filters */}
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -147,36 +105,16 @@ export default function MuseumScreen() {
                         </TouchableOpacity>
                     ))}
                 </ScrollView>
-                {syncStatus && (
-                    <View style={styles.syncIndicator}>
-                        <ActivityIndicator size="small" color={colors.primary} />
-                        <Text style={styles.syncText}>{syncStatus}</Text>
-                    </View>
-                )}
             </View>
 
-            {/* Content Area */}
             {discoveryCount === 0 ? (
-                // Empty State
                 <View style={styles.emptyState} pointerEvents="box-none">
+                    <Ionicons name="cube-outline" size={80} color={colors.lightGray} style={{ marginBottom: 20, opacity: 0.5 }} />
                     <Text style={styles.emptyTitle}>Your Museum is Empty</Text>
                     <Text style={styles.emptySubtitle}>
                         Start scanning objects to build your personal STEM collection!
                     </Text>
-                    <View style={styles.emptyFeatures}>
-                        <View style={styles.featureItem}>
-                            <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                            <Text style={styles.featureText}>Save your discoveries</Text>
-                        </View>
-                        <View style={styles.featureItem}>
-                            <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                            <Text style={styles.featureText}>Review anytime, anywhere</Text>
-                        </View>
-                        <View style={styles.featureItem}>
-                            <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                            <Text style={styles.featureText}>Track your learning journey</Text>
-                        </View>
-                    </View>
+
                     <TouchableOpacity
                         style={styles.startScanningButton}
                         onPress={() => navigation.navigate('Camera' as never)}
@@ -186,7 +124,6 @@ export default function MuseumScreen() {
                     </TouchableOpacity>
                 </View>
             ) : (
-                // Discovery Grid
                 <ScrollView
                     style={styles.scrollView}
                     contentContainerStyle={styles.gridContainer}
@@ -222,11 +159,15 @@ export default function MuseumScreen() {
                                             {item.category.charAt(0).toUpperCase() + item.category.slice(1)}
                                         </Text>
                                     </View>
-                                    <Text style={styles.cardDate}>{new Date(item.dateSaved).toLocaleDateString()}</Text>
+                                    {/* DATE ADDED HERE */}
+                                    <Text style={styles.cardDate}>
+                                        {new Date(item.dateSaved).toLocaleDateString()}
+                                    </Text>
                                 </View>
                             </View>
                         </TouchableOpacity>
                     ))}
+                    <View style={{ height: 80 }} />
                 </ScrollView>
             )}
         </SafeAreaView>
@@ -262,15 +203,8 @@ const styles = StyleSheet.create({
         color: colors.lightGray,
         marginTop: 4,
     },
-    statsButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: '#1A1C2A',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(0, 191, 255, 0.3)',
+    syncBadge: {
+        padding: 5,
     },
     searchContainer: {
         flexDirection: 'row',
@@ -324,15 +258,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 40,
-    },
-    emptyIconContainer: {
-        width: 140,
-        height: 140,
-        borderRadius: 70,
-        backgroundColor: 'rgba(0, 191, 255, 0.1)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 30,
+        marginTop: 50,
     },
     emptyTitle: {
         fontFamily: fonts.heading,
@@ -348,21 +274,6 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 24,
         marginBottom: 30,
-    },
-    emptyFeatures: {
-        gap: 15,
-        marginBottom: 40,
-        width: '100%',
-    },
-    featureItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    featureText: {
-        fontFamily: fonts.body,
-        fontSize: 15,
-        color: colors.text,
     },
     startScanningButton: {
         flexDirection: 'row',
@@ -399,6 +310,7 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         borderWidth: 1,
         borderColor: 'rgba(0, 191, 255, 0.15)',
+        marginBottom: 5,
     },
     cardImage: {
         width: '100%',
@@ -410,10 +322,10 @@ const styles = StyleSheet.create({
     },
     cardTitle: {
         fontFamily: fonts.heading,
-        fontSize: 15,
+        fontSize: 14,
         color: colors.text,
         marginBottom: 8,
-        minHeight: 40,
+        minHeight: 36,
     },
     cardFooter: {
         flexDirection: 'row',
@@ -432,22 +344,7 @@ const styles = StyleSheet.create({
     },
     cardDate: {
         fontFamily: fonts.body,
-        fontSize: 11,
+        fontSize: 10,
         color: colors.lightGray,
-    },
-    syncIndicator: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        backgroundColor: 'rgba(0, 191, 255, 0.1)',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 12,
-        marginTop: 10,
-    },
-    syncText: {
-        fontFamily: fonts.body,
-        fontSize: 12,
-        color: colors.primary,
     },
 });

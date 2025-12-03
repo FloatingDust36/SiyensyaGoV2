@@ -1,21 +1,20 @@
 // app/screens/AchievementsScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     ScrollView,
     TouchableOpacity,
-    ActivityIndicator,
     RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { colors, fonts } from '../theme/theme';
 import { useApp } from '../context/AppContext';
 import AchievementCard from '../components/gamification/AchievementCard';
-import { AchievementProgress, AchievementTier } from '../types/gamification';
+import { AchievementTier } from '../types/gamification';
 
 type FilterType = 'all' | 'unlocked' | 'locked' | 'bronze' | 'silver' | 'gold' | 'platinum';
 
@@ -26,6 +25,16 @@ export default function AchievementsScreen() {
     const [activeFilter, setActiveFilter] = useState<FilterType>('all');
     const [isRefreshing, setIsRefreshing] = useState(false);
 
+    // Auto-refresh when screen comes into focus
+    useFocusEffect(
+        useCallback(() => {
+            if (!user.isGuest) {
+                refreshGamificationData();
+            }
+        }, [user.isGuest])
+    );
+
+    // Keep pull-to-refresh as a fallback, but remove the ugly button
     const handleRefresh = async () => {
         setIsRefreshing(true);
         await refreshGamificationData();
@@ -58,9 +67,8 @@ export default function AchievementsScreen() {
         return (
             <SafeAreaView style={styles.container} edges={['top']}>
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => navigation.goBack()}>
-                        <Ionicons name="arrow-back" size={28} color={colors.text} />
-                    </TouchableOpacity>
+                    {/* Placeholder for layout balance */}
+                    <View style={{ width: 28 }} />
                     <Text style={styles.headerTitle}>Achievements</Text>
                     <View style={{ width: 28 }} />
                 </View>
@@ -87,17 +95,10 @@ export default function AchievementsScreen() {
         <SafeAreaView style={styles.container} edges={['top']}>
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                    <Ionicons name="arrow-back" size={28} color={colors.text} />
-                </TouchableOpacity>
+                {/* Spacer for layout balance since there is no back button in tabs */}
+                <View style={{ width: 28 }} />
                 <Text style={styles.headerTitle}>Achievements</Text>
-                <TouchableOpacity onPress={handleRefresh} disabled={isRefreshing}>
-                    {isRefreshing ? (
-                        <ActivityIndicator size="small" color={colors.primary} />
-                    ) : (
-                        <Ionicons name="refresh" size={24} color={colors.primary} />
-                    )}
-                </TouchableOpacity>
+                <View style={{ width: 28 }} />
             </View>
 
             {/* Progress Summary */}
@@ -195,6 +196,8 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 20,
         paddingVertical: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(0, 191, 255, 0.1)',
     },
     headerTitle: {
         fontFamily: fonts.heading,
@@ -207,6 +210,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#1A1C2A',
         marginHorizontal: 20,
         marginBottom: 20,
+        marginTop: 20,
         padding: 20,
         borderRadius: 15,
         borderWidth: 1,

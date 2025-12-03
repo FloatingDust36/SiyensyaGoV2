@@ -2,7 +2,7 @@
 
 export type AchievementTier = 'bronze' | 'silver' | 'gold' | 'platinum';
 export type RequirementType = 'discovery_count' | 'streak' | 'category_mastery' | 'time_based';
-export type LeaderboardType = 'weekly_discoveries' | 'monthly_xp' | 'all_time_xp' | 'category_master';
+export type LeaderboardType = 'all_time_xp' | 'all_time_discoveries' | 'weekly_xp' | 'weekly_discoveries' | 'monthly_xp' | 'category_master';
 export type LeaderboardPeriod = 'weekly' | 'monthly' | 'all_time';
 
 export type UserStats = {
