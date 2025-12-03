@@ -127,6 +127,17 @@ export default function LearningContentScreen() {
     }, [imageUri, route.params?.boundingBox, result.objectName]);
 
     useEffect(() => {
+        // 1. Cache the result immediately
+        const cacheResult = async () => {
+            const sid = route.params?.sessionId;
+            const oid = route.params?.objectId;
+            if (sid && oid && result) {
+                await sessionManager.saveAnalysisResult(sid, oid, result);
+            }
+        };
+        cacheResult();
+
+        // 2. Load session context
         const loadObjectSession = async () => {
             const sid = route.params?.sessionId;
             if (route.params?.batchQueue && route.params?.currentBatchIndex !== undefined) {
@@ -155,7 +166,7 @@ export default function LearningContentScreen() {
             }
         };
         loadObjectSession();
-    }, [route.params?.sessionId, route.params?.batchQueue, route.params?.currentBatchIndex]);
+    }, [route.params?.sessionId, route.params?.objectId, route.params?.batchQueue, route.params?.currentBatchIndex]);
 
     useEffect(() => {
         const markAsExplored = async () => {
@@ -255,7 +266,6 @@ export default function LearningContentScreen() {
             );
 
             if ('error' in result) {
-                // Fallback for error: just show modal
                 setBatchCompleteModalVisible(true);
                 setIsLoadingNextObject(false);
                 return;
@@ -493,51 +503,57 @@ export default function LearningContentScreen() {
             <SafeAreaView style={styles.bottomNav} edges={['bottom']}>
                 {currentSection === SECTIONS.length - 1 ? (
                     <View style={styles.finalButtons}>
-                        {objectSessionId && !isFromMuseum ? (
-                            <>
-                                <TouchableOpacity style={styles.secondaryButtonEqual} onPress={handleScanAnother}>
-                                    <Ionicons name="camera-outline" size={18} color={colors.primary} />
-                                    <Text style={styles.secondaryButtonText}>New Photo</Text>
-                                </TouchableOpacity>
+                        {/* Bookmark Button (Replaces New Photo) */}
+                        <TouchableOpacity
+                            style={[styles.secondaryButtonEqual, isSaved && styles.bookmarkedButton]}
+                            onPress={handleAddToMuseum}
+                        >
+                            <Ionicons
+                                name={isSaved ? "bookmark" : "bookmark-outline"}
+                                size={18}
+                                color={isSaved ? colors.background : colors.primary}
+                            />
+                            <Text style={[styles.secondaryButtonText, isSaved && { color: colors.background }]}>
+                                {isSaved ? 'Saved' : 'Bookmark'}
+                            </Text>
+                        </TouchableOpacity>
 
-                                <TouchableOpacity style={[styles.primaryButtonEqual]} onPress={handleBackToSession} disabled={isLoadingNextObject}>
-                                    {isInBatchMode ? (
-                                        <>
-                                            <Text style={styles.primaryButtonText}>
-                                                {currentBatchIndex + 1 < batchQueue.length ? 'Next Object' : 'Complete Batch'}
-                                            </Text>
-                                            <Ionicons name="arrow-forward" size={18} color={colors.background} />
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Ionicons name="arrow-back" size={18} color={colors.background} />
-                                            <Text style={styles.primaryButtonText}>Back to Session</Text>
-                                        </>
-                                    )}
-                                </TouchableOpacity>
-                            </>
-                        ) : (
-                            <>
-                                <TouchableOpacity style={styles.secondaryButtonEqual} onPress={handleScanAnother}>
-                                    <Ionicons name="camera-outline" size={18} color={colors.primary} />
-                                    <Text style={styles.secondaryButtonText}>Scan Again</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={[styles.primaryButtonEqual, isFromMuseum && styles.deleteButton]} onPress={handleAddToMuseum}>
-                                    <Ionicons name={isFromMuseum ? "trash" : (isSaved ? "checkmark" : "bookmark")} size={18} color={colors.background} />
-                                    <Text style={styles.primaryButtonText}>{isFromMuseum ? 'Delete' : (isSaved ? 'Saved!' : 'Save')}</Text>
-                                </TouchableOpacity>
-                            </>
-                        )}
+                        {/* Back to Session / Next Batch */}
+                        <TouchableOpacity style={[styles.primaryButtonEqual]} onPress={handleBackToSession} disabled={isLoadingNextObject}>
+                            {isInBatchMode ? (
+                                <>
+                                    <Text style={styles.primaryButtonText}>
+                                        {currentBatchIndex + 1 < batchQueue.length ? 'Next Object' : 'Complete Batch'}
+                                    </Text>
+                                    <Ionicons name="arrow-forward" size={18} color={colors.background} />
+                                </>
+                            ) : (
+                                <>
+                                    <Ionicons name="arrow-back" size={18} color={colors.background} />
+                                    <Text style={styles.primaryButtonText}>Back to Session</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
                     </View>
                 ) : (
                     <View style={styles.navigationButtons}>
-                        <TouchableOpacity style={[styles.navButton, currentSection === 0 && styles.navButtonDisabled]} onPress={handlePrevious} disabled={currentSection === 0}>
-                            <Ionicons name="chevron-back" size={20} color={currentSection === 0 ? colors.lightGray : colors.primary} />
-                            <Text style={[styles.navButtonText, currentSection === 0 && styles.navButtonTextDisabled]}>Previous</Text>
+                        {/* Previous Button - Equal Width */}
+                        <TouchableOpacity
+                            style={[
+                                styles.primaryButtonEqual,
+                                { backgroundColor: `${section.color}40`, borderWidth: 1, elevation: 0, borderColor: section.color, marginRight: 10 },
+                                currentSection === 0 && { opacity: 10, backgroundColor: 'transparent' }
+                            ]}
+                            onPress={handlePrevious}
+                            disabled={currentSection === 0}
+                        >
+                            <Ionicons name="chevron-back" size={20} color={currentSection === 0 ? colors.lightGray : colors.background} />
+                            <Text style={[styles.primaryButtonText, { color: currentSection === 0 ? colors.lightGray : colors.background }]}>Previous</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={[styles.nextButton, { backgroundColor: section.color }]} onPress={handleNext}>
-                            <Text style={styles.nextButtonText}>Next Section</Text>
+                        {/* Next Button - Equal Width */}
+                        <TouchableOpacity style={[styles.primaryButtonEqual, { backgroundColor: section.color }]} onPress={handleNext}>
+                            <Text style={styles.primaryButtonText}>Next</Text>
                             <Ionicons name="chevron-forward" size={20} color={colors.background} />
                         </TouchableOpacity>
                     </View>
@@ -617,7 +633,7 @@ const styles = StyleSheet.create({
     previewCardTitle: { fontFamily: fonts.heading, color: colors.text, fontSize: 14 },
     previewCardSubtitle: { fontFamily: fonts.body, color: colors.lightGray, fontSize: 11, marginTop: 2 },
     bottomNav: { backgroundColor: colors.background, borderTopColor: 'rgba(0, 191, 255, 0.2)', borderTopWidth: 1, paddingHorizontal: 20, paddingTop: 15 },
-    navigationButtons: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 10 },
+    navigationButtons: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 10, gap: 12 },
     navButton: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 10, borderRadius: 12 },
     navButtonDisabled: { opacity: 0.3 },
     navButtonText: { fontFamily: fonts.heading, color: colors.primary, fontSize: 14 },
@@ -628,6 +644,7 @@ const styles = StyleSheet.create({
     secondaryButtonEqual: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 16, borderRadius: 25, borderWidth: 2, borderColor: colors.primary },
     primaryButtonEqual: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 16, borderRadius: 25, backgroundColor: colors.primary, shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
     secondaryButtonText: { fontFamily: fonts.heading, color: colors.primary, fontSize: 12 },
-    primaryButtonText: { fontFamily: fonts.heading, color: colors.background, fontSize: 12 },
+    primaryButtonText: { fontFamily: fonts.heading, color: colors.background, fontSize: 11 },
     deleteButton: { backgroundColor: colors.warning, shadowColor: colors.warning },
+    bookmarkedButton: { backgroundColor: colors.success, borderColor: colors.success },
 });

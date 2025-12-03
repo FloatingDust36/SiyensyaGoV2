@@ -1,4 +1,4 @@
-// app/screens/DiscoverySessionScreen.tsx - UI RESTORED
+// app/screens/DiscoverySessionScreen.tsx
 import React, { useState, useMemo } from 'react';
 import {
     View,
@@ -8,18 +8,22 @@ import {
     TouchableOpacity,
     ScrollView,
     ActivityIndicator,
-    Alert
+    Alert,
+    Modal
 } from 'react-native';
 import { RouteProp, useRoute, useNavigation, useIsFocused } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList, DetectedObject, SceneContext } from '../navigation/types';
+import { RootStackParamList, DetectedObject, SceneContext, AnalysisResult } from '../navigation/types';
 import { colors, fonts } from '../theme/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { analyzeSelectedObject } from '../services/gemini';
 import { useApp } from '../context/AppContext';
 import * as Haptics from 'expo-haptics';
 import { sessionManager } from '../utils/sessionManager';
+import CustomAlertModal from '../components/CustomAlertModal';
+import OptionsModal from '../components/OptionsModal';
+import CustomToast from '../components/CustomToast';
 
 type DiscoverySessionRouteProp = RouteProp<RootStackParamList, 'ObjectSelection'>;
 type NavigationProp = StackNavigationProp<RootStackParamList>;
@@ -37,6 +41,14 @@ export default function DiscoverySessionScreen() {
     const [exploredObjectIds, setExploredObjectIds] = useState<string[]>([]);
     const [selectedObjects, setSelectedObjects] = useState<Set<string>>(new Set());
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+    // Modal & Toast State
+    const [learnConfirmVisible, setLearnConfirmVisible] = useState(false);
+    const [optionsVisible, setOptionsVisible] = useState(false);
+    const [tipsModalVisible, setTipsModalVisible] = useState(false);
+    const [pendingObjectsToLearn, setPendingObjectsToLearn] = useState<DetectedObject[]>([]);
+    const [showToast, setShowToast] = useState(false);
+    const [toastMessage, setToastMessage] = useState('');
 
     // Layout State
     const [imageContainerLayout, setImageContainerLayout] = useState({ width: 0, height: 0 });
@@ -109,7 +121,7 @@ export default function DiscoverySessionScreen() {
 
     const handleLearnSelected = async () => {
         if (selectedObjects.size === 0) {
-            Alert.alert('No Objects Selected', 'Please select at least one object to learn about.');
+            triggerToast('Please select at least one object.');
             return;
         }
 
@@ -117,15 +129,13 @@ export default function DiscoverySessionScreen() {
             .map(id => detectedObjects.find(obj => obj.id === id))
             .filter(obj => obj !== undefined) as DetectedObject[];
 
-        const messageTitle = selectedObjectsArray.length === 1 ? 'Start Learning' : 'Batch Learning';
-        const messageBody = selectedObjectsArray.length === 1
-            ? `Ready to explore "${selectedObjectsArray[0].name}"?`
-            : `You selected ${selectedObjectsArray.length} objects. We'll learn about them one by one!\n\n✨ Auto-navigation enabled - you'll automatically move to the next object after finishing each one.`;
+        setPendingObjectsToLearn(selectedObjectsArray);
+        setLearnConfirmVisible(true);
+    };
 
-        Alert.alert(messageTitle, messageBody, [
-            { text: 'Start', onPress: () => startLearning(selectedObjectsArray) },
-            { text: 'Cancel', style: 'cancel' }
-        ]);
+    const onConfirmLearn = () => {
+        setLearnConfirmVisible(false);
+        setTimeout(() => startLearning(pendingObjectsToLearn), 300);
     };
 
     const startLearning = async (objectsQueue: DetectedObject[]) => {
@@ -146,6 +156,9 @@ export default function DiscoverySessionScreen() {
             }
 
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+            // Cache result via useEffect in LearningContentScreen or SessionManager manually here
+            // (LearningContentScreen will handle saving to cache on mount)
 
             navigation.navigate('LearningContent', {
                 sessionId: sessionId || undefined,
@@ -176,16 +189,29 @@ export default function DiscoverySessionScreen() {
     };
 
     const handleFallbackOptions = () => {
-        Alert.alert(
-            'Not finding what you want?',
-            'Choose an option:',
-            [
-                { text: 'Retake Photo', onPress: () => navigation.navigate('MainTabs', { screen: 'Camera' }) },
-                { text: 'Describe Object', onPress: () => Alert.alert('Coming Soon', 'Text-based object search will be available soon!') },
-                { text: 'Browse Categories', onPress: () => Alert.alert('Coming Soon', 'Category browser will be available soon!') },
-                { text: 'Cancel', style: 'cancel' }
-            ]
-        );
+        setOptionsVisible(true);
+    };
+
+    const handleReopenExplored = async (object: DetectedObject) => {
+        if (sessionId) {
+            const cached = await sessionManager.getCachedResult(sessionId, object.id);
+            if (cached) {
+                navigation.navigate('LearningContent', {
+                    sessionId,
+                    objectId: object.id,
+                    imageUri,
+                    boundingBox: object.boundingBox,
+                    result: cached
+                });
+                return;
+            }
+        }
+        triggerToast('Could not retrieve session data.');
+    };
+
+    const triggerToast = (msg: string) => {
+        setToastMessage(msg);
+        setShowToast(true);
     };
 
     const getConfidenceColor = (confidence: number): string => {
@@ -201,6 +227,7 @@ export default function DiscoverySessionScreen() {
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
+            {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
                     <Ionicons name="close" size={24} color={colors.lightGray} />
@@ -214,9 +241,7 @@ export default function DiscoverySessionScreen() {
                         }
                     </Text>
                 </View>
-                <TouchableOpacity onPress={handleFallbackOptions} style={styles.helpButton}>
-                    <Ionicons name="help-circle-outline" size={24} color={colors.primary} />
-                </TouchableOpacity>
+                <View style={{ width: 40 }} />
             </View>
 
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -229,15 +254,6 @@ export default function DiscoverySessionScreen() {
                             </Text>
                         </View>
                         <Text style={styles.contextDescription}>{sceneContext.description}</Text>
-                        {sceneContext.relatedConcepts && sceneContext.relatedConcepts.length > 0 && (
-                            <View style={styles.conceptTags}>
-                                {sceneContext.relatedConcepts.map((concept: string, index: number) => (
-                                    <View key={index} style={styles.conceptTag}>
-                                        <Text style={styles.conceptTagText}>{concept}</Text>
-                                    </View>
-                                ))}
-                            </View>
-                        )}
                     </View>
                 )}
 
@@ -306,11 +322,11 @@ export default function DiscoverySessionScreen() {
 
                     {unexploredObjects.length === 0 && exploredObjects.length > 0 ? (
                         <View style={styles.emptyState}>
-                            <Ionicons name="checkmark-done-circle" size={80} color={colors.success} />
+                            <Ionicons name="checkmark-circle" size={80} color={colors.success} />
                             <Text style={styles.emptyStateTitle}>All Objects Explored!</Text>
                             <Text style={styles.emptyStateSubtitle}>
                                 You've learned about all {detectedObjects.length} objects from this photo.
-                                Great job! 🎉
+                                Great job!
                             </Text>
                             <TouchableOpacity
                                 style={styles.newPhotoButton}
@@ -408,13 +424,18 @@ export default function DiscoverySessionScreen() {
                             </Text>
                         </View>
                         <Text style={styles.exploredSubtitle}>
-                            Great job! You've learned about these objects from this photo.
+                            Tap an object to review what you learned.
                         </Text>
                         {exploredObjects.map((object) => (
-                            <View key={object.id} style={styles.exploredCard}>
+                            <TouchableOpacity
+                                key={object.id}
+                                style={styles.exploredCard}
+                                onPress={() => handleReopenExplored(object)}
+                            >
                                 <Ionicons name="checkmark-circle" size={20} color={colors.success} />
                                 <Text style={styles.exploredObjectName}>{object.name}</Text>
-                            </View>
+                                <Ionicons name="chevron-forward" size={16} color={colors.success} style={{ marginLeft: 'auto' }} />
+                            </TouchableOpacity>
                         ))}
                     </View>
                 )}
@@ -453,6 +474,94 @@ export default function DiscoverySessionScreen() {
                     </TouchableOpacity>
                 </View>
             )}
+
+            {/* --- MODALS --- */}
+
+            <CustomAlertModal
+                visible={learnConfirmVisible}
+                title={pendingObjectsToLearn.length === 1 ? "Start Learning?" : "Start Batch Learning?"}
+                message={pendingObjectsToLearn.length === 1
+                    ? `Ready to explore "${pendingObjectsToLearn[0]?.name}"?`
+                    : `You selected ${pendingObjectsToLearn.length} objects. We'll learn about them one by one!`}
+                confirmText="Let's Go!"
+                onClose={() => setLearnConfirmVisible(false)}
+                onConfirm={onConfirmLearn}
+                type="info"
+            />
+
+            <OptionsModal
+                visible={optionsVisible}
+                title="Not finding what you want?"
+                onClose={() => setOptionsVisible(false)}
+                options={[
+                    {
+                        label: 'Retake Photo',
+                        icon: 'camera',
+                        onPress: () => navigation.navigate('MainTabs', { screen: 'Camera' })
+                    },
+                    {
+                        label: 'Scanning Tips',
+                        icon: 'bulb',
+                        onPress: () => setTipsModalVisible(true)
+                    },
+                    {
+                        label: 'Describe Object',
+                        icon: 'text',
+                        onPress: () => triggerToast('Text description coming soon!')
+                    }
+                ]}
+            />
+
+            <Modal
+                visible={tipsModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setTipsModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Scanning Tips</Text>
+                            <TouchableOpacity onPress={() => setTipsModalVisible(false)}>
+                                <Ionicons name="close" size={24} color={colors.lightGray} />
+                            </TouchableOpacity>
+                        </View>
+                        <ScrollView style={styles.modalBody}>
+                            <View style={styles.tipItem}>
+                                <Ionicons name="sunny-outline" size={24} color={colors.warning} />
+                                <View style={styles.tipTextContainer}>
+                                    <Text style={styles.tipTitle}>Lighting</Text>
+                                    <Text style={styles.tipDesc}>Ensure the object is well-lit. Avoid strong shadows.</Text>
+                                </View>
+                            </View>
+                            <View style={styles.tipItem}>
+                                <Ionicons name="scan-outline" size={24} color={colors.primary} />
+                                <View style={styles.tipTextContainer}>
+                                    <Text style={styles.tipTitle}>Framing</Text>
+                                    <Text style={styles.tipDesc}>Get closer! The object should fill most of the frame.</Text>
+                                </View>
+                            </View>
+                            <View style={styles.tipItem}>
+                                <Ionicons name="hand-left-outline" size={24} color={colors.secondary} />
+                                <View style={styles.tipTextContainer}>
+                                    <Text style={styles.tipTitle}>Stability</Text>
+                                    <Text style={styles.tipDesc}>Hold your phone steady to avoid blur.</Text>
+                                </View>
+                            </View>
+                        </ScrollView>
+                        <TouchableOpacity style={styles.modalButton} onPress={() => setTipsModalVisible(false)}>
+                            <Text style={styles.modalButtonText}>Got it</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            <CustomToast
+                visible={showToast}
+                message={toastMessage}
+                onHide={() => setShowToast(false)}
+                type="info"
+            />
         </SafeAreaView>
     );
 }
@@ -461,7 +570,6 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 15, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0, 191, 255, 0.2)' },
     closeButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#1A1C2A', justifyContent: 'center', alignItems: 'center' },
-    helpButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#1A1C2A', justifyContent: 'center', alignItems: 'center' },
     headerCenter: { flex: 1, alignItems: 'center', paddingHorizontal: 10 },
     headerTitle: { fontFamily: fonts.heading, color: colors.text, fontSize: 18 },
     headerSubtitle: { fontFamily: fonts.body, color: colors.lightGray, fontSize: 12, marginTop: 2 },
@@ -470,9 +578,6 @@ const styles = StyleSheet.create({
     contextHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
     contextTitle: { fontFamily: fonts.heading, color: colors.primary, fontSize: 16 },
     contextDescription: { fontFamily: fonts.body, color: colors.lightGray, fontSize: 14, lineHeight: 20, marginBottom: 12 },
-    conceptTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    conceptTag: { backgroundColor: 'rgba(0, 191, 255, 0.2)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(0, 191, 255, 0.4)' },
-    conceptTagText: { fontFamily: fonts.heading, fontSize: 11, color: colors.primary },
     imageSection: { marginHorizontal: 16, marginTop: 16, borderRadius: 15, overflow: 'hidden', aspectRatio: 4 / 3, backgroundColor: '#1A1C2A', position: 'relative' },
     image: { width: '100%', height: '100%' },
     boundingBox: { position: 'absolute', borderWidth: 3, borderRadius: 8 },
@@ -515,4 +620,16 @@ const styles = StyleSheet.create({
     learnSelectedButton: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.secondary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 25, minWidth: 160, justifyContent: 'center' },
     learnSelectedButtonDisabled: { opacity: 0.6 },
     learnSelectedText: { fontFamily: fonts.heading, fontSize: 14, color: colors.background },
+    // Modal Styles
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+    modalContent: { backgroundColor: '#1A1C2A', width: '100%', borderRadius: 20, borderWidth: 1, borderColor: colors.primary, overflow: 'hidden' },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)' },
+    modalTitle: { fontFamily: fonts.heading, fontSize: 18, color: colors.text },
+    modalBody: { padding: 20 },
+    tipItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 15 },
+    tipTextContainer: { flex: 1 },
+    tipTitle: { fontFamily: fonts.heading, fontSize: 16, color: colors.text, marginBottom: 4 },
+    tipDesc: { fontFamily: fonts.body, fontSize: 14, color: colors.lightGray, lineHeight: 20 },
+    modalButton: { backgroundColor: colors.primary, margin: 20, padding: 15, borderRadius: 12, alignItems: 'center' },
+    modalButtonText: { fontFamily: fonts.heading, fontSize: 16, color: colors.background },
 });
