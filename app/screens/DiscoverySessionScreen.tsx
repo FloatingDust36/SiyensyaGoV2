@@ -1,4 +1,4 @@
-// app/screens/DiscoverySessionScreen.tsx
+// app/screens/DiscoverySessionScreen.tsx - UI RESTORED
 import React, { useState, useMemo } from 'react';
 import {
     View,
@@ -20,7 +20,6 @@ import { analyzeSelectedObject } from '../services/gemini';
 import { useApp } from '../context/AppContext';
 import * as Haptics from 'expo-haptics';
 import { sessionManager } from '../utils/sessionManager';
-import OptionsModal from '../components/OptionsModal'; // Import the new modal
 
 type DiscoverySessionRouteProp = RouteProp<RootStackParamList, 'ObjectSelection'>;
 type NavigationProp = StackNavigationProp<RootStackParamList>;
@@ -38,7 +37,6 @@ export default function DiscoverySessionScreen() {
     const [exploredObjectIds, setExploredObjectIds] = useState<string[]>([]);
     const [selectedObjects, setSelectedObjects] = useState<Set<string>>(new Set());
     const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [optionsVisible, setOptionsVisible] = useState(false); // Modal state
 
     // Layout State
     const [imageContainerLayout, setImageContainerLayout] = useState({ width: 0, height: 0 });
@@ -122,9 +120,8 @@ export default function DiscoverySessionScreen() {
         const messageTitle = selectedObjectsArray.length === 1 ? 'Start Learning' : 'Batch Learning';
         const messageBody = selectedObjectsArray.length === 1
             ? `Ready to explore "${selectedObjectsArray[0].name}"?`
-            : `You selected ${selectedObjectsArray.length} objects. We'll learn about them one by one!`;
+            : `You selected ${selectedObjectsArray.length} objects. We'll learn about them one by one!\n\n✨ Auto-navigation enabled - you'll automatically move to the next object after finishing each one.`;
 
-        // We can replace this Alert with a custom modal in a future increment if desired
         Alert.alert(messageTitle, messageBody, [
             { text: 'Start', onPress: () => startLearning(selectedObjectsArray) },
             { text: 'Cancel', style: 'cancel' }
@@ -178,6 +175,19 @@ export default function DiscoverySessionScreen() {
         }
     };
 
+    const handleFallbackOptions = () => {
+        Alert.alert(
+            'Not finding what you want?',
+            'Choose an option:',
+            [
+                { text: 'Retake Photo', onPress: () => navigation.navigate('MainTabs', { screen: 'Camera' }) },
+                { text: 'Describe Object', onPress: () => Alert.alert('Coming Soon', 'Text-based object search will be available soon!') },
+                { text: 'Browse Categories', onPress: () => Alert.alert('Coming Soon', 'Category browser will be available soon!') },
+                { text: 'Cancel', style: 'cancel' }
+            ]
+        );
+    };
+
     const getConfidenceColor = (confidence: number): string => {
         if (confidence >= 85) return colors.success;
         if (confidence >= 70) return colors.primary;
@@ -198,11 +208,15 @@ export default function DiscoverySessionScreen() {
                 <View style={styles.headerCenter}>
                     <Text style={styles.headerTitle}>Discovery Session</Text>
                     <Text style={styles.headerSubtitle}>
-                        {detectedObjects.length} objects detected
+                        {exploredObjectIds.length > 0
+                            ? `${unexploredObjects.length} unexplored ${unexploredObjects.length === 1 ? 'object' : 'objects'}`
+                            : `Found ${detectedObjects.length} ${detectedObjects.length === 1 ? 'object' : 'objects'}`
+                        }
                     </Text>
                 </View>
-                {/* Help Button Removed. Placeholder for alignment. */}
-                <View style={{ width: 40 }} />
+                <TouchableOpacity onPress={handleFallbackOptions} style={styles.helpButton}>
+                    <Ionicons name="help-circle-outline" size={24} color={colors.primary} />
+                </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -215,6 +229,15 @@ export default function DiscoverySessionScreen() {
                             </Text>
                         </View>
                         <Text style={styles.contextDescription}>{sceneContext.description}</Text>
+                        {sceneContext.relatedConcepts && sceneContext.relatedConcepts.length > 0 && (
+                            <View style={styles.conceptTags}>
+                                {sceneContext.relatedConcepts.map((concept: string, index: number) => (
+                                    <View key={index} style={styles.conceptTag}>
+                                        <Text style={styles.conceptTagText}>{concept}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
                     </View>
                 )}
 
@@ -226,8 +249,8 @@ export default function DiscoverySessionScreen() {
                         onLayout={(e) => setImageContainerLayout(e.nativeEvent.layout)}
                     />
 
-                    {/* Render Bounding Boxes for ALL selected items (explored or not) */}
-                    {displayedImageRect && detectedObjects.map((object) => {
+                    {/* Render Bounding Boxes */}
+                    {displayedImageRect && unexploredObjects.map((object) => {
                         const isSelected = selectedObjects.has(object.id);
                         if (!isSelected) return null;
 
@@ -263,7 +286,10 @@ export default function DiscoverySessionScreen() {
                                         {object.name}
                                     </Text>
                                 </View>
-                                {/* Corners omitted for brevity/cleaner look, simple box is fine */}
+                                <View style={[styles.corner, styles.topLeft, { borderColor: confidenceColor }]} />
+                                <View style={[styles.corner, styles.topRight, { borderColor: confidenceColor }]} />
+                                <View style={[styles.corner, styles.bottomLeft, { borderColor: confidenceColor }]} />
+                                <View style={[styles.corner, styles.bottomRight, { borderColor: confidenceColor }]} />
                             </View>
                         );
                     })}
@@ -272,90 +298,133 @@ export default function DiscoverySessionScreen() {
                 {/* Object List */}
                 <View style={styles.objectListSection}>
                     <Text style={styles.sectionTitle}>Detected Objects</Text>
-                    <Text style={styles.sectionSubtitle}>
-                        Tap to select objects to learn about.
-                    </Text>
+                    {unexploredObjects.length > 0 && (
+                        <Text style={styles.sectionSubtitle}>
+                            Select objects to learn about (tap to see bounding box)
+                        </Text>
+                    )}
 
-                    {/* List ALL objects: Unexplored first, then Explored */}
-                    {unexploredObjects.map((object) => {
-                        const isSelected = selectedObjects.has(object.id);
-                        const confidenceColor = getConfidenceColor(object.confidence);
-
-                        return (
+                    {unexploredObjects.length === 0 && exploredObjects.length > 0 ? (
+                        <View style={styles.emptyState}>
+                            <Ionicons name="checkmark-done-circle" size={80} color={colors.success} />
+                            <Text style={styles.emptyStateTitle}>All Objects Explored!</Text>
+                            <Text style={styles.emptyStateSubtitle}>
+                                You've learned about all {detectedObjects.length} objects from this photo.
+                                Great job! 🎉
+                            </Text>
                             <TouchableOpacity
-                                key={object.id}
-                                style={[
-                                    styles.objectCard,
-                                    isSelected && styles.objectCardSelected
-                                ]}
-                                onPress={() => toggleObjectSelection(object.id)}
-                                disabled={isAnalyzing}
-                                activeOpacity={0.7}
+                                style={styles.newPhotoButton}
+                                onPress={() => {
+                                    if (sessionId) {
+                                        navigation.replace('SessionSummary', {
+                                            sessionId,
+                                            exploredCount: detectedObjects.length,
+                                            totalCount: detectedObjects.length
+                                        });
+                                    } else {
+                                        navigation.navigate('MainTabs', { screen: 'Camera' });
+                                    }
+                                }}
                             >
-                                <View style={styles.checkboxContainer}>
-                                    {isSelected ? (
-                                        <Ionicons name="checkbox" size={24} color={colors.secondary} />
-                                    ) : (
-                                        <Ionicons name="square-outline" size={24} color={colors.lightGray} />
-                                    )}
-                                </View>
-                                <View style={styles.objectInfo}>
-                                    <Text style={styles.objectName}>{object.name}</Text>
-                                    <Text style={[styles.confidenceLabel, { color: confidenceColor }]}>
-                                        {object.confidence}% match
-                                    </Text>
-                                </View>
+                                <Ionicons name="trophy" size={20} color={colors.background} />
+                                <Text style={styles.newPhotoButtonText}>View Summary</Text>
                             </TouchableOpacity>
-                        );
-                    })}
-
-                    {/* Separator for Explored Items if any exist */}
-                    {exploredObjects.length > 0 && (
-                        <View style={styles.exploredSection}>
-                            <View style={styles.exploredHeader}>
-                                <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                                <Text style={styles.exploredTitle}>Already Explored</Text>
-                            </View>
-
-                            {exploredObjects.map((object) => {
-                                const isSelected = selectedObjects.has(object.id);
-                                return (
-                                    <TouchableOpacity
-                                        key={object.id}
-                                        style={[
-                                            styles.objectCard,
-                                            { borderColor: colors.success, opacity: 0.9 },
-                                            isSelected && styles.objectCardSelected
-                                        ]}
-                                        onPress={() => toggleObjectSelection(object.id)}
-                                        disabled={isAnalyzing}
-                                    >
-                                        <View style={styles.checkboxContainer}>
-                                            {isSelected ? (
-                                                <Ionicons name="checkbox" size={24} color={colors.secondary} />
-                                            ) : (
-                                                <Ionicons name="reload-circle" size={24} color={colors.success} />
-                                            )}
-                                        </View>
-                                        <View style={styles.objectInfo}>
-                                            <Text style={styles.objectName}>{object.name}</Text>
-                                            <Text style={[styles.confidenceLabel, { color: colors.success }]}>
-                                                Tap to revisit
-                                            </Text>
-                                        </View>
-                                    </TouchableOpacity>
-                                );
-                            })}
                         </View>
+                    ) : unexploredObjects.length === 0 ? (
+                        <View style={styles.emptyState}>
+                            <Ionicons name="search-outline" size={80} color={colors.lightGray} />
+                            <Text style={styles.emptyStateTitle}>No Objects Detected</Text>
+                            <Text style={styles.emptyStateSubtitle}>
+                                Try taking a clearer photo with better lighting.
+                            </Text>
+                            <TouchableOpacity
+                                style={styles.newPhotoButton}
+                                onPress={() => navigation.navigate('MainTabs', { screen: 'Camera' })}
+                            >
+                                <Ionicons name="camera" size={20} color={colors.background} />
+                                <Text style={styles.newPhotoButtonText}>Try Again</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        unexploredObjects.map((object) => {
+                            const isSelected = selectedObjects.has(object.id);
+                            const confidenceColor = getConfidenceColor(object.confidence);
+
+                            return (
+                                <TouchableOpacity
+                                    key={object.id}
+                                    style={[
+                                        styles.objectCard,
+                                        isSelected && styles.objectCardSelected
+                                    ]}
+                                    onPress={() => toggleObjectSelection(object.id)}
+                                    disabled={isAnalyzing}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={styles.checkboxContainer}>
+                                        {isSelected ? (
+                                            <Ionicons name="checkbox" size={24} color={colors.secondary} />
+                                        ) : (
+                                            <Ionicons name="square-outline" size={24} color={colors.lightGray} />
+                                        )}
+                                    </View>
+                                    <View style={styles.objectInfo}>
+                                        <Text style={styles.objectName}>{object.name}</Text>
+                                        <View style={styles.objectMeta}>
+                                            <View
+                                                style={[
+                                                    styles.confidenceIndicator,
+                                                    {
+                                                        backgroundColor: `${confidenceColor}20`,
+                                                        borderColor: confidenceColor
+                                                    }
+                                                ]}
+                                            >
+                                                <Text style={[styles.confidenceLabel, { color: confidenceColor }]}>
+                                                    {object.confidence}% confident
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    </View>
+
+                                    {isSelected && (
+                                        <View style={styles.selectionIndicator}>
+                                            <Ionicons name="checkmark-circle" size={20} color={colors.secondary} />
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                            );
+                        })
                     )}
                 </View>
 
+                {/* Already Explored Section */}
+                {exploredObjects.length > 0 && (
+                    <View style={styles.exploredSection}>
+                        <View style={styles.exploredHeader}>
+                            <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                            <Text style={styles.exploredTitle}>
+                                Already Explored ({exploredObjects.length})
+                            </Text>
+                        </View>
+                        <Text style={styles.exploredSubtitle}>
+                            Great job! You've learned about these objects from this photo.
+                        </Text>
+                        {exploredObjects.map((object) => (
+                            <View key={object.id} style={styles.exploredCard}>
+                                <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                                <Text style={styles.exploredObjectName}>{object.name}</Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
+
                 {/* Not Finding What You Want Card */}
-                <TouchableOpacity style={styles.fallbackCard} onPress={() => setOptionsVisible(true)}>
+                <TouchableOpacity style={styles.fallbackCard} onPress={handleFallbackOptions}>
                     <Ionicons name="search-outline" size={24} color={colors.warning} />
                     <View style={styles.fallbackText}>
                         <Text style={styles.fallbackTitle}>Not finding what you want?</Text>
-                        <Text style={styles.fallbackSubtitle}>Tap for more options</Text>
+                        <Text style={styles.fallbackSubtitle}>Try describing it or browse categories</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={20} color={colors.lightGray} />
                 </TouchableOpacity>
@@ -384,32 +453,6 @@ export default function DiscoverySessionScreen() {
                     </TouchableOpacity>
                 </View>
             )}
-
-            {/* Options Modal */}
-            <OptionsModal
-                visible={optionsVisible}
-                title="More Options"
-                onClose={() => setOptionsVisible(false)}
-                options={[
-                    {
-                        label: 'Retake Photo',
-                        icon: 'camera-outline',
-                        onPress: () => navigation.navigate('MainTabs', { screen: 'Camera' })
-                    },
-                    {
-                        label: 'Describe Object (Coming Soon)',
-                        icon: 'text-outline',
-                        color: colors.lightGray,
-                        onPress: () => Alert.alert('Coming Soon', 'This feature is under development.')
-                    },
-                    {
-                        label: 'Browse Categories (Coming Soon)',
-                        icon: 'grid-outline',
-                        color: colors.lightGray,
-                        onPress: () => Alert.alert('Coming Soon', 'This feature is under development.')
-                    },
-                ]}
-            />
         </SafeAreaView>
     );
 }
@@ -418,6 +461,7 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 15, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0, 191, 255, 0.2)' },
     closeButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#1A1C2A', justifyContent: 'center', alignItems: 'center' },
+    helpButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#1A1C2A', justifyContent: 'center', alignItems: 'center' },
     headerCenter: { flex: 1, alignItems: 'center', paddingHorizontal: 10 },
     headerTitle: { fontFamily: fonts.heading, color: colors.text, fontSize: 18 },
     headerSubtitle: { fontFamily: fonts.body, color: colors.lightGray, fontSize: 12, marginTop: 2 },
@@ -425,24 +469,43 @@ const styles = StyleSheet.create({
     contextCard: { backgroundColor: 'rgba(0, 191, 255, 0.1)', marginHorizontal: 16, marginTop: 16, padding: 16, borderRadius: 15, borderWidth: 1, borderColor: 'rgba(0, 191, 255, 0.3)' },
     contextHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
     contextTitle: { fontFamily: fonts.heading, color: colors.primary, fontSize: 16 },
-    contextDescription: { fontFamily: fonts.body, color: colors.lightGray, fontSize: 14, lineHeight: 20 },
+    contextDescription: { fontFamily: fonts.body, color: colors.lightGray, fontSize: 14, lineHeight: 20, marginBottom: 12 },
+    conceptTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    conceptTag: { backgroundColor: 'rgba(0, 191, 255, 0.2)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(0, 191, 255, 0.4)' },
+    conceptTagText: { fontFamily: fonts.heading, fontSize: 11, color: colors.primary },
     imageSection: { marginHorizontal: 16, marginTop: 16, borderRadius: 15, overflow: 'hidden', aspectRatio: 4 / 3, backgroundColor: '#1A1C2A', position: 'relative' },
     image: { width: '100%', height: '100%' },
     boundingBox: { position: 'absolute', borderWidth: 3, borderRadius: 8 },
     boundingBoxLabel: { position: 'absolute', left: 0, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, maxWidth: 180 },
     boundingBoxLabelText: { fontFamily: fonts.heading, fontSize: 11, color: colors.background },
+    corner: { position: 'absolute', width: 16, height: 16, borderWidth: 3 },
+    topLeft: { top: -3, left: -3, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 8 },
+    topRight: { top: -3, right: -3, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 8 },
+    bottomLeft: { bottom: -3, left: -3, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 8 },
+    bottomRight: { bottom: -3, right: -3, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
     objectListSection: { padding: 16 },
     sectionTitle: { fontFamily: fonts.heading, fontSize: 20, color: colors.text, marginBottom: 4 },
-    sectionSubtitle: { fontFamily: fonts.body, fontSize: 13, color: colors.lightGray, marginBottom: 16 },
+    sectionSubtitle: { fontFamily: fonts.body, fontSize: 13, color: colors.lightGray, marginBottom: 16, lineHeight: 18 },
     objectCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A1C2A', padding: 16, borderRadius: 15, marginBottom: 12, borderWidth: 2, borderColor: 'rgba(0, 191, 255, 0.2)' },
     objectCardSelected: { borderColor: colors.secondary, backgroundColor: 'rgba(138, 43, 226, 0.1)' },
     checkboxContainer: { marginRight: 12 },
     objectInfo: { flex: 1 },
-    objectName: { fontFamily: fonts.heading, fontSize: 16, color: colors.text, marginBottom: 4 },
+    objectName: { fontFamily: fonts.heading, fontSize: 16, color: colors.text, marginBottom: 6 },
+    objectMeta: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    confidenceIndicator: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
     confidenceLabel: { fontFamily: fonts.heading, fontSize: 11 },
-    exploredSection: { marginTop: 20 },
-    exploredHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+    selectionIndicator: { marginLeft: 8 },
+    emptyState: { alignItems: 'center', paddingVertical: 40, paddingHorizontal: 20 },
+    emptyStateTitle: { fontFamily: fonts.heading, fontSize: 24, color: colors.success, marginTop: 20, marginBottom: 8 },
+    emptyStateSubtitle: { fontFamily: fonts.body, fontSize: 15, color: colors.lightGray, textAlign: 'center', lineHeight: 22, marginBottom: 24 },
+    newPhotoButton: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.primary, paddingVertical: 14, paddingHorizontal: 24, borderRadius: 25 },
+    newPhotoButtonText: { fontFamily: fonts.heading, fontSize: 16, color: colors.background },
+    exploredSection: { padding: 16, marginTop: 16 },
+    exploredHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
     exploredTitle: { fontFamily: fonts.heading, fontSize: 18, color: colors.success },
+    exploredSubtitle: { fontFamily: fonts.body, fontSize: 13, color: colors.lightGray, marginBottom: 12, lineHeight: 18 },
+    exploredCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(57, 255, 20, 0.1)', padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(57, 255, 20, 0.3)' },
+    exploredObjectName: { fontFamily: fonts.heading, fontSize: 14, color: colors.text },
     fallbackCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 69, 0, 0.1)', marginHorizontal: 16, padding: 16, borderRadius: 15, borderWidth: 1, borderColor: 'rgba(255, 69, 0, 0.3)', gap: 12 },
     fallbackText: { flex: 1 },
     fallbackTitle: { fontFamily: fonts.heading, fontSize: 15, color: colors.warning, marginBottom: 2 },
