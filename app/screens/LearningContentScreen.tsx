@@ -13,6 +13,7 @@ import * as Haptics from 'expo-haptics';
 import { cropImageForObject } from '../utils/imageCropper';
 import { sessionManager } from '../utils/sessionManager';
 import { analyzeSelectedObject } from '../services/gemini';
+import FactLoader from '../components/FactLoader';
 
 type LearningContentRouteProp = RouteProp<RootStackParamList, 'LearningContent'>;
 type NavigationProp = StackNavigationProp<RootStackParamList>;
@@ -86,14 +87,11 @@ export default function LearningContentScreen() {
         initTracking();
 
         return () => {
-            // Cleanup using the ref or current value if available
-            // We can't rely on state inside cleanup easily, but since we are unmounting,
-            // we try to use the current state if possible, or just skip if null.
-            // Note: In strict mode/fast refresh, this might fire oddly, but for prod it's fine.
+            // Cleanup handled by separate effect
         };
     }, []);
 
-    // EFFECT: End Gamification session on unmount (separate effect to access latest state)
+    // EFFECT: End Gamification session on unmount
     useEffect(() => {
         return () => {
             if (trackingSessionId) {
@@ -151,7 +149,7 @@ export default function LearningContentScreen() {
             }
 
             if (sid) {
-                setObjectSessionId(sid); // Correctly set the Object Session ID
+                setObjectSessionId(sid);
 
                 try {
                     const session = await sessionManager.getSession(sid);
@@ -179,22 +177,20 @@ export default function LearningContentScreen() {
         loadObjectSession();
     }, [route.params?.sessionId, route.params?.batchQueue, route.params?.currentBatchIndex]);
 
-    // EFFECT: Auto-mark as explored (Using objectSessionId)
+    // Auto-mark as explored
     useEffect(() => {
         const markAsExplored = async () => {
-            const sid = route.params?.sessionId; // Use route param directly for safety
+            const sid = route.params?.sessionId;
             const objId = route.params?.objectId;
 
             if (sid && objId) {
                 try {
-                    // Check if already marked to avoid dupes/writes
                     const session = await sessionManager.getSession(sid);
 
                     if (session && !session.exploredObjectIds.includes(objId)) {
                         console.log(`Marking ${objId} explored in ${sid}`);
                         await sessionManager.markObjectAsExplored(sid, objId);
 
-                        // Refresh local state
                         const updatedSession = await sessionManager.getSession(sid);
                         if (updatedSession) {
                             const hasMore = updatedSession.exploredObjectIds.length < updatedSession.detectedObjects.length;
@@ -212,7 +208,6 @@ export default function LearningContentScreen() {
             }
         };
 
-        // Delay slightly to ensure UI is ready
         const timer = setTimeout(markAsExplored, 1000);
         return () => clearTimeout(timer);
     }, [route.params?.sessionId, route.params?.objectId]);
@@ -240,29 +235,21 @@ export default function LearningContentScreen() {
 
     // NAVIGATION: Handle Back / Next Batch Object
     const handleBackToSession = async () => {
-        // A. Batch Mode Logic
         if (isInBatchMode && batchQueue.length > 0) {
             const nextIndex = currentBatchIndex + 1;
 
             if (nextIndex < batchQueue.length) {
-                // Auto-navigate to next object
                 await navigateToNextBatchObject(nextIndex);
             } else {
-                // Batch complete!
                 Alert.alert(
                     'Batch Complete! 🎉',
                     `You've learned about all ${batchQueue.length} selected objects!`,
                     [
-                        {
-                            text: 'Back to Session',
-                            onPress: () => exitBatchMode()
-                        }
+                        { text: 'Back to Session', onPress: () => exitBatchMode() }
                     ]
                 );
             }
-        }
-        // B. Standard Mode Logic
-        else if (objectSessionId) {
+        } else if (objectSessionId) {
             try {
                 const session = await sessionManager.getSession(objectSessionId);
 
@@ -276,7 +263,6 @@ export default function LearningContentScreen() {
                             totalCount: session.detectedObjects.length
                         });
                     } else {
-                        // Return to selection screen
                         navigation.navigate('ObjectSelection', {
                             sessionId: objectSessionId,
                             imageUri: session.fullImageUri,
@@ -284,7 +270,6 @@ export default function LearningContentScreen() {
                         });
                     }
                 } else {
-                    // Fallback if session expired
                     console.warn("Session not found (standard), redirecting to Camera");
                     navigation.navigate('MainTabs', { screen: 'Camera' });
                 }
@@ -293,12 +278,10 @@ export default function LearningContentScreen() {
                 navigation.navigate('MainTabs', { screen: 'Camera' });
             }
         } else {
-            // No session ID available
             navigation.navigate('MainTabs', { screen: 'Camera' });
         }
     };
 
-    // LOGIC: Go to next item in batch
     const navigateToNextBatchObject = async (nextIndex: number) => {
         const nextObject = batchQueue[nextIndex];
         setIsLoadingNextObject(true);
@@ -320,9 +303,8 @@ export default function LearningContentScreen() {
 
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-            // Replace current screen with next object details
             navigation.replace('LearningContent', {
-                sessionId: objectSessionId || undefined, // Pass the correct Object Session ID
+                sessionId: objectSessionId || undefined,
                 objectId: nextObject.id,
                 imageUri,
                 boundingBox: nextObject.boundingBox,
@@ -348,7 +330,6 @@ export default function LearningContentScreen() {
         }
     };
 
-    // LOGIC: Exit batch mode correctly
     const exitBatchMode = async () => {
         if (objectSessionId) {
             const session = await sessionManager.getSession(objectSessionId);
@@ -359,7 +340,6 @@ export default function LearningContentScreen() {
                     detectedObjects: session.detectedObjects,
                 });
             } else {
-                console.warn("Session lost during batch exit");
                 navigation.navigate('MainTabs', { screen: 'Camera' });
             }
         } else {
@@ -368,7 +348,6 @@ export default function LearningContentScreen() {
     };
 
     const handleAddToMuseum = async () => {
-        // Handle Deletion
         if (isFromMuseum) {
             Alert.alert('Delete Discovery', `Remove "${result.objectName}"?`, [
                 { text: 'Cancel', style: 'cancel' },
@@ -391,24 +370,21 @@ export default function LearningContentScreen() {
             return;
         }
 
-        // Handle Already Saved
         if (isSaved) {
             navigation.navigate('MainTabs', { screen: 'Museum' });
             return;
         }
 
-        // Optimistic Save
+        // OPTIMISTIC SAVE
         try {
             // Immediate Visual Feedback
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            setIsSaved(true); // Turn icon green immediately
+            setIsSaved(true);
 
             // Heavy lifting
             const permanentImageUri = await saveImagePermanently(imageUri);
 
-            // Start Cloud Sync WITHOUT awaiting it for the Alert
-            // We deliberately do NOT await this promise here so the alert pops up instantly.
-            // The Context handles the cloud sync in the background.
+            // Background Cloud Sync (Not awaited)
             addDiscovery({
                 objectName: result.objectName,
                 confidence: result.confidence,
@@ -426,7 +402,7 @@ export default function LearningContentScreen() {
                 console.error("Background sync failed:", err);
             });
 
-            // Update Local Session State
+            // Update Local Session
             if (objectSessionId) {
                 sessionManager.getSession(objectSessionId).then(updatedSession => {
                     if (updatedSession) {
@@ -442,7 +418,7 @@ export default function LearningContentScreen() {
             Alert.alert('Saved!', `"${result.objectName}" has been added to your Museum!`, [{ text: 'OK' }]);
 
         } catch (error) {
-            setIsSaved(false); // Revert on local error
+            setIsSaved(false);
             Alert.alert('Error', 'Failed to save locally.');
             console.error('Save error:', error);
         }
@@ -594,13 +570,11 @@ export default function LearningContentScreen() {
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                    style={[styles.primaryButtonEqual, isLoadingNextObject && { opacity: 0.6 }]}
+                                    style={[styles.primaryButtonEqual]}
                                     onPress={handleBackToSession}
                                     disabled={isLoadingNextObject}
                                 >
-                                    {isLoadingNextObject ? (
-                                        <ActivityIndicator size="small" color={colors.background} />
-                                    ) : isInBatchMode ? (
+                                    {isInBatchMode ? (
                                         <>
                                             <Text style={styles.primaryButtonText}>
                                                 {currentBatchIndex + 1 < batchQueue.length ? 'Next Object' : 'Complete Batch'}
@@ -646,6 +620,11 @@ export default function LearningContentScreen() {
                     </View>
                 )}
             </SafeAreaView>
+
+            {/* Overlay for Batch Loading */}
+            {isLoadingNextObject && (
+                <FactLoader message="Analyzing next object..." />
+            )}
         </SafeAreaView>
     );
 }

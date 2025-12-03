@@ -1,7 +1,7 @@
 // app/services/gemini.ts
 
 import { GoogleGenerativeAI, Part } from '@google/generative-ai';
-import { readAsStringAsync } from 'expo-file-system/legacy';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { SceneContext } from '../navigation/types';
 
 const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
@@ -10,17 +10,27 @@ if (!API_KEY) throw new Error('Gemini API key not set');
 const genAI = new GoogleGenerativeAI(API_KEY);
 const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
+// Resizes image before sending to AI to speed up upload
 async function fileToGenerativePart(uri: string): Promise<Part> {
-  const base64Data = await readAsStringAsync(uri, {
-    encoding: 'base64',
-  });
+  try {
+    // Resize to max 800px width and compress (0.7 quality)
+    // This reduces payload size by ~60-80%
+    const manipulated = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 800 } }],
+      { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+    );
 
-  return {
-    inlineData: {
-      data: base64Data,
-      mimeType: 'image/jpeg',
-    },
-  };
+    return {
+      inlineData: {
+        data: manipulated.base64 || '',
+        mimeType: 'image/jpeg',
+      },
+    };
+  } catch (error) {
+    console.error("Error compressing image for AI:", error);
+    throw error;
+  }
 }
 
 // Stage 1: Detect objects in image with scene context analysis
@@ -196,11 +206,6 @@ Scene: Kitchen
 
     console.log(`✓ Detected ${parsed.objects.length} objects with scene context`);
 
-    // Log scene context for debugging
-    if (parsed.sceneContext) {
-      console.log(`📍 Scene: ${parsed.sceneContext.location} - ${parsed.sceneContext.description}`);
-    }
-
     return parsed;
 
   } catch (error) {
@@ -217,13 +222,13 @@ export async function analyzeSelectedObject(
   objectName: string,
   boundingBox: { x: number; y: number; width: number; height: number },
   userGradeLevel: string = 'juniorHigh',
-  sceneContext?: SceneContext  // NEW: Optional scene context
+  sceneContext?: SceneContext
 ) {
   console.log(`🔬 Stage 2: Analyzing "${objectName}"${sceneContext ? ' with scene context' : ''}...`);
   try {
     const imagePart = await fileToGenerativePart(imageUri);
 
-    // Grade level context (unchanged from original)
+    // Grade level context
     const gradeLevelContext = {
       'elementary': {
         audience: 'Grades K-6 students (ages 5-12)',

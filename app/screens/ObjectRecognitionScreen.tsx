@@ -1,7 +1,7 @@
 // app/screens/ObjectRecognitionScreen.tsx
 
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Image, ActivityIndicator, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, Easing, ActivityIndicator } from 'react-native';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -15,130 +15,75 @@ import { sessionManager } from '../utils/sessionManager';
 type ObjectRecognitionScreenRouteProp = RouteProp<RootStackParamList, 'ObjectRecognition'>;
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 
+const ANALYSIS_STEPS = [
+    "Initializing neural network...",
+    "Enhancing image resolution...",
+    "Detecting edges and contours...",
+    "Extracting features...",
+    "Matching patterns in database...",
+    "Verifying scientific context...",
+    "Finalizing results..."
+];
+
 export default function ObjectRecognitionScreen() {
     const route = useRoute<ObjectRecognitionScreenRouteProp>();
     const navigation = useNavigation<NavigationProp>();
     const { imageUri } = route.params;
 
-    const [isDetecting, setIsDetecting] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [currentStep, setCurrentStep] = useState(0);
 
-    // Animation refs
+    // Animations
     const scanLineAnim = useRef(new Animated.Value(0)).current;
     const pulseAnim = useRef(new Animated.Value(1)).current;
-    const rotateAnim = useRef(new Animated.Value(0)).current;
-    const particleAnims = useRef(
-        Array.from({ length: 6 }, () => ({
-            x: new Animated.Value(0),
-            y: new Animated.Value(0),
-            opacity: new Animated.Value(0),
-            scale: new Animated.Value(0),
-        }))
-    ).current;
+    const textFadeAnim = useRef(new Animated.Value(1)).current;
 
-    // Start animations
     useEffect(() => {
-        // Progress bar
+        // 1. Scanning Line Animation (Up and Down loop)
         Animated.loop(
             Animated.sequence([
                 Animated.timing(scanLineAnim, {
                     toValue: 1,
                     duration: 2000,
-                    useNativeDriver: false,
+                    easing: Easing.linear,
+                    useNativeDriver: true,
                 }),
                 Animated.timing(scanLineAnim, {
                     toValue: 0,
-                    duration: 0,
-                    useNativeDriver: false,
-                }),
-            ])
-        ).start();
-
-        // Pulse animation
-        Animated.loop(
-            Animated.sequence([
-                Animated.timing(pulseAnim, {
-                    toValue: 1.15,
-                    duration: 1000,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(pulseAnim, {
-                    toValue: 1,
-                    duration: 1000,
+                    duration: 2000,
+                    easing: Easing.linear,
                     useNativeDriver: true,
                 }),
             ])
         ).start();
 
-        // Rotation
-        Animated.loop(
-            Animated.timing(rotateAnim, {
-                toValue: 1,
-                duration: 3000,
-                useNativeDriver: true,
-            })
-        ).start();
+        // 2. Analysis Steps Cycler
+        const stepInterval = setInterval(() => {
+            // Fade out
+            Animated.timing(textFadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
+                setCurrentStep((prev) => (prev + 1) % ANALYSIS_STEPS.length);
+                // Fade in
+                Animated.timing(textFadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+            });
+        }, 1200); // Change text every 1.2 seconds
 
-        // Particle animations
-        particleAnims.forEach((particle, index) => {
-            const angle = (index / particleAnims.length) * Math.PI * 2;
-            const distance = 60;
-
-            Animated.loop(
-                Animated.sequence([
-                    Animated.parallel([
-                        Animated.timing(particle.x, {
-                            toValue: Math.cos(angle) * distance,
-                            duration: 1500,
-                            useNativeDriver: true,
-                        }),
-                        Animated.timing(particle.y, {
-                            toValue: Math.sin(angle) * distance,
-                            duration: 1500,
-                            useNativeDriver: true,
-                        }),
-                        Animated.timing(particle.opacity, {
-                            toValue: 0.8,
-                            duration: 750,
-                            useNativeDriver: true,
-                        }),
-                        Animated.timing(particle.scale, {
-                            toValue: 1,
-                            duration: 750,
-                            useNativeDriver: true,
-                        }),
-                    ]),
-                    Animated.parallel([
-                        Animated.timing(particle.opacity, {
-                            toValue: 0,
-                            duration: 750,
-                            useNativeDriver: true,
-                        }),
-                        Animated.timing(particle.scale, {
-                            toValue: 0,
-                            duration: 750,
-                            useNativeDriver: true,
-                        }),
-                    ]),
-                ])
-            ).start();
-        });
-
-        // Detection with Session Creation
+        // 3. Perform Detection
         const performDetection = async () => {
             if (!imageUri) return;
 
+            // Wait at least 2.5s so the user enjoys the animation
             const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
             const [detectionResult] = await Promise.all([
                 detectObjectsInImage(imageUri),
-                delay(1500) // Minimum display time for UX
+                delay(3000)
             ]);
+
+            clearInterval(stepInterval);
 
             if ('error' in detectionResult) {
                 setError(detectionResult.error);
             } else if (detectionResult.objects && detectionResult.objects.length > 0) {
-                // Create Session with detected objects and scene context
                 try {
                     const sessionId = await sessionManager.createSession(
                         imageUri,
@@ -146,17 +91,8 @@ export default function ObjectRecognitionScreen() {
                         detectionResult.sceneContext
                     );
 
-                    console.log(`✓ Created session ${sessionId} with ${detectionResult.objects.length} objects`);
-
-                    // Log scene context if available
-                    if (detectionResult.sceneContext) {
-                        console.log(`📍 Scene: ${detectionResult.sceneContext.location}`);
-                    }
-
-                    // Success haptic
                     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-                    // Navigate with sessionId - now guaranteed to exist
                     navigation.replace('ObjectSelection', {
                         sessionId,
                         imageUri,
@@ -166,61 +102,37 @@ export default function ObjectRecognitionScreen() {
                 } catch (sessionError) {
                     console.error('❌ Error creating session:', sessionError);
                     setError('Failed to create discovery session. Please try again.');
-                    setIsDetecting(false);
-                    return; // Don't navigate on error
                 }
             } else {
-                setError('No objects detected in the image. Please try again with a clearer photo.');
+                setError('No objects detected. Try a clearer photo.');
             }
-            setIsDetecting(false);
         };
 
         performDetection();
+
+        return () => clearInterval(stepInterval);
     }, [imageUri]);
-
-    const progressWidth = scanLineAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['0%', '100%'],
-    });
-
-    const spin = rotateAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['0deg', '360deg'],
-    });
 
     const handleRetake = () => {
         navigation.goBack();
     };
 
-    // Error State
+    // Interpolate scan line position
+    const translateY = scanLineAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0, 350], // Approx height of the scanning area
+    });
+
+    // Error View
     if (error) {
         return (
             <SafeAreaView style={styles.container}>
-                <View style={[styles.content, { justifyContent: 'center' }]}>
-                    <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-                        <Ionicons name="alert-circle-outline" size={100} color={colors.warning} />
-                    </Animated.View>
-                    <Text style={styles.errorTitle}>Detection Failed</Text>
+                <View style={styles.contentCenter}>
+                    <Ionicons name="alert-circle-outline" size={80} color={colors.warning} />
+                    <Text style={styles.errorTitle}>Scan Failed</Text>
                     <Text style={styles.errorText}>{error}</Text>
-
-                    <View style={styles.errorSuggestions}>
-                        <Text style={styles.suggestionTitle}>Try these solutions:</Text>
-                        <View style={styles.suggestionItem}>
-                            <Ionicons name="checkmark-circle-outline" size={20} color={colors.primary} />
-                            <Text style={styles.suggestionText}>Ensure good lighting</Text>
-                        </View>
-                        <View style={styles.suggestionItem}>
-                            <Ionicons name="checkmark-circle-outline" size={20} color={colors.primary} />
-                            <Text style={styles.suggestionText}>Focus on clear objects</Text>
-                        </View>
-                        <View style={styles.suggestionItem}>
-                            <Ionicons name="checkmark-circle-outline" size={20} color={colors.primary} />
-                            <Text style={styles.suggestionText}>Avoid blurry photos</Text>
-                        </View>
-                    </View>
-
                     <TouchableOpacity style={styles.retakeButton} onPress={handleRetake}>
-                        <Ionicons name="camera-outline" size={24} color={colors.background} />
+                        <Ionicons name="camera-reverse" size={20} color={colors.background} />
                         <Text style={styles.retakeButtonText}>Try Again</Text>
                     </TouchableOpacity>
                 </View>
@@ -228,45 +140,44 @@ export default function ObjectRecognitionScreen() {
         );
     }
 
-    // Loading State
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.content}>
-                <View style={styles.imageContainer}>
+                <Text style={styles.headerText}>ANALYZING TARGET...</Text>
+
+                {/* HUD Container */}
+                <View style={styles.scannerContainer}>
+                    {/* The Image */}
                     <Image source={{ uri: imageUri }} style={styles.image} />
+
+                    {/* Scan Line */}
+                    <Animated.View
+                        style={[
+                            styles.scanLine,
+                            { transform: [{ translateY }] }
+                        ]}
+                    />
+
+                    {/* HUD Corners */}
+                    <View style={[styles.corner, styles.topLeft]} />
+                    <View style={[styles.corner, styles.topRight]} />
+                    <View style={[styles.corner, styles.bottomLeft]} />
+                    <View style={[styles.corner, styles.bottomRight]} />
+
+                    {/* Dark Overlay for "Tech" feel */}
+                    <View style={styles.gridOverlay} />
                 </View>
 
+                {/* Dynamic Status Text */}
                 <View style={styles.statusContainer}>
-                    <View style={styles.particleContainer}>
-                        {particleAnims.map((particle, index) => (
-                            <Animated.View
-                                key={index}
-                                style={[
-                                    styles.particle,
-                                    {
-                                        transform: [
-                                            { translateX: particle.x },
-                                            { translateY: particle.y },
-                                            { scale: particle.scale },
-                                        ],
-                                        opacity: particle.opacity,
-                                    },
-                                ]}
-                            />
-                        ))}
-
-                        <Animated.View style={{ transform: [{ rotate: spin }] }}>
-                            <Ionicons name="scan-circle-outline" size={60} color={colors.primary} />
-                        </Animated.View>
-                    </View>
-
-                    <Text style={styles.statusText}>Detecting Objects...</Text>
-                    <Text style={styles.subStatusText}>Analyzing your photo with AI</Text>
-
-                    <View style={styles.progressBarContainer}>
-                        <Animated.View style={[styles.progressBar, { width: progressWidth }]} />
-                    </View>
+                    <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 10 }} />
+                    <Animated.Text style={[styles.statusText, { opacity: textFadeAnim }]}>
+                        {ANALYSIS_STEPS[currentStep]}
+                    </Animated.Text>
                 </View>
+
+                {/* Tip */}
+                <Text style={styles.tipText}>Keep the app open while we identify objects.</Text>
             </View>
         </SafeAreaView>
     );
@@ -279,136 +190,134 @@ const styles = StyleSheet.create({
     },
     content: {
         flex: 1,
-        justifyContent: 'flex-start',
+        alignItems: 'center',
+        paddingTop: 40,
+    },
+    contentCenter: {
+        flex: 1,
+        justifyContent: 'center',
         alignItems: 'center',
         padding: 20,
-        paddingTop: 10,
     },
-    imageContainer: {
-        width: '90%',
-        aspectRatio: 1,
+    headerText: {
+        fontFamily: fonts.heading,
+        color: colors.primary,
+        fontSize: 16,
+        letterSpacing: 2,
+        marginBottom: 30,
+    },
+    scannerContainer: {
+        width: 300,
+        height: 350, // Taller for portrait objects
         borderRadius: 20,
-        marginBottom: 10,
-        marginTop: 10,
         overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(0, 191, 255, 0.3)',
+        backgroundColor: '#000',
+        position: 'relative',
     },
     image: {
         width: '100%',
         height: '100%',
-        borderRadius: 20,
-        borderWidth: 4,
+        opacity: 0.8, // Slightly dim image to make scanner pop
+    },
+    scanLine: {
+        position: 'absolute',
+        width: '100%',
+        height: 4,
+        backgroundColor: colors.primary,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 1,
+        shadowRadius: 10,
+        elevation: 5,
+        zIndex: 10,
+    },
+    gridOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        borderWidth: 1,
+        borderColor: 'rgba(0, 191, 255, 0.1)',
+        zIndex: 1,
+    },
+    corner: {
+        position: 'absolute',
+        width: 30,
+        height: 30,
         borderColor: colors.primary,
+        zIndex: 20,
+    },
+    topLeft: {
+        top: 0,
+        left: 0,
+        borderTopWidth: 3,
+        borderLeftWidth: 3,
+        borderTopLeftRadius: 20,
+    },
+    topRight: {
+        top: 0,
+        right: 0,
+        borderTopWidth: 3,
+        borderRightWidth: 3,
+        borderTopRightRadius: 20,
+    },
+    bottomLeft: {
+        bottom: 0,
+        left: 0,
+        borderBottomWidth: 3,
+        borderLeftWidth: 3,
+        borderBottomLeftRadius: 20,
+    },
+    bottomRight: {
+        bottom: 0,
+        right: 0,
+        borderBottomWidth: 3,
+        borderRightWidth: 3,
+        borderBottomRightRadius: 20,
     },
     statusContainer: {
+        flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
-        marginBottom: 20,
-    },
-    particleContainer: {
-        width: 120,
-        height: 120,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 10,
-    },
-    particle: {
-        position: 'absolute',
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: colors.primary,
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.8,
-        shadowRadius: 4,
-        elevation: 5,
+        marginTop: 40,
+        height: 40,
     },
     statusText: {
-        fontFamily: fonts.heading,
-        color: colors.primary,
-        fontSize: 28,
-    },
-    subStatusText: {
         fontFamily: fonts.body,
-        color: colors.lightGray,
+        color: colors.text,
         fontSize: 16,
     },
-    progressBarContainer: {
-        width: 200,
-        height: 4,
-        backgroundColor: '#1A1C2A',
-        borderRadius: 2,
-        overflow: 'hidden',
-        marginTop: 10,
-    },
-    progressBar: {
-        height: '100%',
-        backgroundColor: colors.primary,
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.8,
-        shadowRadius: 4,
-        elevation: 3,
+    tipText: {
+        position: 'absolute',
+        bottom: 50,
+        fontFamily: fonts.body,
+        color: colors.lightGray,
+        fontSize: 12,
+        textAlign: 'center',
     },
     errorTitle: {
         fontFamily: fonts.heading,
         color: colors.warning,
-        fontSize: 28,
+        fontSize: 24,
         marginTop: 20,
         marginBottom: 10,
     },
     errorText: {
         fontFamily: fonts.body,
         color: colors.lightGray,
-        fontSize: 16,
         textAlign: 'center',
-        paddingHorizontal: 20,
         marginBottom: 30,
-    },
-    errorSuggestions: {
-        backgroundColor: '#1A1C2A',
-        borderRadius: 15,
-        padding: 20,
-        width: '100%',
-        marginBottom: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 69, 0, 0.3)',
-    },
-    suggestionTitle: {
-        fontFamily: fonts.heading,
-        color: colors.primary,
-        fontSize: 16,
-        marginBottom: 15,
-    },
-    suggestionItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        marginBottom: 10,
-    },
-    suggestionText: {
-        fontFamily: fonts.body,
-        color: colors.lightGray,
-        fontSize: 14,
     },
     retakeButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
-        paddingVertical: 18,
-        paddingHorizontal: 40,
-        borderRadius: 30,
+        gap: 8,
         backgroundColor: colors.primary,
-        marginTop: 10,
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 5,
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 25,
     },
     retakeButtonText: {
         fontFamily: fonts.heading,
         color: colors.background,
-        fontSize: 18,
+        fontSize: 16,
     },
 });
