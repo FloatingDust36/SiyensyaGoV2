@@ -1,6 +1,6 @@
 // app/screens/LearningContentScreen.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Animated, Dimensions, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Animated, Dimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -14,11 +14,12 @@ import { cropImageForObject } from '../utils/imageCropper';
 import { sessionManager } from '../utils/sessionManager';
 import { analyzeSelectedObject } from '../services/gemini';
 import FactLoader from '../components/FactLoader';
+import Toast from '../components/CustomToast';
+import CustomAlertModal from '../components/CustomAlertModal';
+import { formatAIText } from '../utils/textFormatter';
 
 type LearningContentRouteProp = RouteProp<RootStackParamList, 'LearningContent'>;
 type NavigationProp = StackNavigationProp<RootStackParamList>;
-
-const { width } = Dimensions.get('window');
 
 const SECTIONS = [
     { key: 'funFact', icon: 'flash', title: 'Alam mo ba?', subtitle: 'Fun Fact', color: colors.secondary },
@@ -32,33 +33,35 @@ export default function LearningContentScreen() {
     const route = useRoute<LearningContentRouteProp>();
     const navigation = useNavigation<NavigationProp>();
 
-    // Context & Actions
     const { startLearningSession, endLearningSession, addDiscovery, removeDiscovery, user } = useApp();
 
-    // 1. SEPARATE SESSION IDs
-    // objectSessionId: The local session grouping detected objects (from Camera/Recognition)
+    // Sessions
     const [objectSessionId, setObjectSessionId] = useState<string | null>(null);
-    // trackingSessionId: The database session for Gamification/XP tracking
     const [trackingSessionId, setTrackingSessionId] = useState<string | null>(null);
 
+    // State
     const [sceneContext, setSceneContext] = useState<SceneContext | null>(null);
     const [hasMoreObjects, setHasMoreObjects] = useState(false);
     const [remainingCount, setRemainingCount] = useState(0);
-    const [isLoadingSession, setIsLoadingSession] = useState(true);
     const [exploredObjectIds, setExploredObjectIds] = useState<string[]>([]);
 
-    // Image cropping states
+    // UI State
     const [croppedImageUri, setCroppedImageUri] = useState<string | null>(null);
     const [isLoadingCrop, setIsLoadingCrop] = useState(false);
-
     const [isSaved, setIsSaved] = useState(false);
     const [isFromMuseum, setIsFromMuseum] = useState(false);
 
-    // Batch learning states
+    // Batch Mode
     const [batchQueue, setBatchQueue] = useState<DetectedObject[]>([]);
     const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
     const [isInBatchMode, setIsInBatchMode] = useState(false);
     const [isLoadingNextObject, setIsLoadingNextObject] = useState(false);
+
+    // Modals & Toasts
+    const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+    const [batchCompleteModalVisible, setBatchCompleteModalVisible] = useState(false);
+    const [showToast, setShowToast] = useState(false);
+    const [toastMessage, setToastMessage] = useState('');
 
     const imageUri = route.params?.imageUri || '';
     const result = route.params?.result || {
@@ -72,26 +75,21 @@ export default function LearningContentScreen() {
         explore_further: 'No information available.',
     };
 
+    // Animations
     const [currentSection, setCurrentSection] = useState(0);
     const fadeAnim = useRef(new Animated.Value(1)).current;
     const slideAnim = useRef(new Animated.Value(0)).current;
     const scrollViewRef = useRef<ScrollView>(null);
 
-    // EFFECT: Handle Gamification Tracking Session
     useEffect(() => {
         const initTracking = async () => {
             const id = await startLearningSession('single_discovery');
             setTrackingSessionId(id);
         };
-
         initTracking();
-
-        return () => {
-            // Cleanup handled by separate effect
-        };
+        return () => { };
     }, []);
 
-    // EFFECT: End Gamification session on unmount
     useEffect(() => {
         return () => {
             if (trackingSessionId) {
@@ -100,7 +98,6 @@ export default function LearningContentScreen() {
         };
     }, [trackingSessionId]);
 
-    // EFFECT: Check if from Museum
     useEffect(() => {
         const discoveryId = route.params?.discoveryId;
         if (discoveryId) {
@@ -109,21 +106,15 @@ export default function LearningContentScreen() {
         }
     }, [route.params]);
 
-    // EFFECT: Crop Image
     useEffect(() => {
         const cropImage = async () => {
             const boundingBox = route.params?.boundingBox;
             if (boundingBox && imageUri && result.objectName) {
                 setIsLoadingCrop(true);
                 try {
-                    const cropped = await cropImageForObject(
-                        imageUri,
-                        boundingBox,
-                        result.objectName
-                    );
+                    const cropped = await cropImageForObject(imageUri, boundingBox, result.objectName);
                     setCroppedImageUri(cropped);
                 } catch (error) {
-                    console.error('Error cropping image:', error);
                     setCroppedImageUri(imageUri);
                 } finally {
                     setIsLoadingCrop(false);
@@ -132,16 +123,12 @@ export default function LearningContentScreen() {
                 setCroppedImageUri(imageUri);
             }
         };
-
         cropImage();
     }, [imageUri, route.params?.boundingBox, result.objectName]);
 
-    // EFFECT: Load Object Session & Batch Mode
     useEffect(() => {
         const loadObjectSession = async () => {
             const sid = route.params?.sessionId;
-
-            // Initialize batch mode
             if (route.params?.batchQueue && route.params?.currentBatchIndex !== undefined) {
                 setBatchQueue(route.params.batchQueue);
                 setCurrentBatchIndex(route.params.currentBatchIndex);
@@ -150,18 +137,13 @@ export default function LearningContentScreen() {
 
             if (sid) {
                 setObjectSessionId(sid);
-
                 try {
                     const session = await sessionManager.getSession(sid);
                     if (session) {
-                        if (session.context) {
-                            setSceneContext(session.context);
-                        }
+                        if (session.context) setSceneContext(session.context);
                         setExploredObjectIds(session.exploredObjectIds || []);
-
                         const hasMore = session.exploredObjectIds.length < session.detectedObjects.length;
                         setHasMoreObjects(hasMore);
-
                         if (hasMore) {
                             const unexplored = session.detectedObjects.length - session.exploredObjectIds.length;
                             setRemainingCount(unexplored);
@@ -171,13 +153,10 @@ export default function LearningContentScreen() {
                     console.error('Error loading object session:', error);
                 }
             }
-            setIsLoadingSession(false);
         };
-
         loadObjectSession();
     }, [route.params?.sessionId, route.params?.batchQueue, route.params?.currentBatchIndex]);
 
-    // Auto-mark as explored
     useEffect(() => {
         const markAsExplored = async () => {
             const sid = route.params?.sessionId;
@@ -186,17 +165,13 @@ export default function LearningContentScreen() {
             if (sid && objId) {
                 try {
                     const session = await sessionManager.getSession(sid);
-
                     if (session && !session.exploredObjectIds.includes(objId)) {
-                        console.log(`Marking ${objId} explored in ${sid}`);
                         await sessionManager.markObjectAsExplored(sid, objId);
-
                         const updatedSession = await sessionManager.getSession(sid);
                         if (updatedSession) {
                             const hasMore = updatedSession.exploredObjectIds.length < updatedSession.detectedObjects.length;
                             setHasMoreObjects(hasMore);
                             setExploredObjectIds(updatedSession.exploredObjectIds);
-
                             if (hasMore) {
                                 setRemainingCount(updatedSession.detectedObjects.length - updatedSession.exploredObjectIds.length);
                             }
@@ -207,7 +182,6 @@ export default function LearningContentScreen() {
                 }
             }
         };
-
         const timer = setTimeout(markAsExplored, 1000);
         return () => clearTimeout(timer);
     }, [route.params?.sessionId, route.params?.objectId]);
@@ -219,7 +193,6 @@ export default function LearningContentScreen() {
         ]).start(() => {
             setCurrentSection(newIndex);
             scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-
             Animated.parallel([
                 Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
                 Animated.timing(slideAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
@@ -230,32 +203,21 @@ export default function LearningContentScreen() {
     const handleNext = () => currentSection < SECTIONS.length - 1 && changeSection(currentSection + 1);
     const handlePrevious = () => currentSection > 0 && changeSection(currentSection - 1);
     const handleDotPress = (index: number) => changeSection(index);
-
     const handleScanAnother = () => navigation.navigate('MainTabs', { screen: 'Camera' });
 
-    // NAVIGATION: Handle Back / Next Batch Object
     const handleBackToSession = async () => {
         if (isInBatchMode && batchQueue.length > 0) {
             const nextIndex = currentBatchIndex + 1;
-
             if (nextIndex < batchQueue.length) {
                 await navigateToNextBatchObject(nextIndex);
             } else {
-                Alert.alert(
-                    'Batch Complete! 🎉',
-                    `You've learned about all ${batchQueue.length} selected objects!`,
-                    [
-                        { text: 'Back to Session', onPress: () => exitBatchMode() }
-                    ]
-                );
+                setBatchCompleteModalVisible(true);
             }
         } else if (objectSessionId) {
             try {
                 const session = await sessionManager.getSession(objectSessionId);
-
                 if (session) {
                     const allExplored = session.exploredObjectIds.length >= session.detectedObjects.length;
-
                     if (allExplored) {
                         navigation.replace('SessionSummary', {
                             sessionId: objectSessionId,
@@ -270,11 +232,9 @@ export default function LearningContentScreen() {
                         });
                     }
                 } else {
-                    console.warn("Session not found (standard), redirecting to Camera");
                     navigation.navigate('MainTabs', { screen: 'Camera' });
                 }
             } catch (error) {
-                console.error("Error navigating back:", error);
                 navigation.navigate('MainTabs', { screen: 'Camera' });
             }
         } else {
@@ -285,7 +245,6 @@ export default function LearningContentScreen() {
     const navigateToNextBatchObject = async (nextIndex: number) => {
         const nextObject = batchQueue[nextIndex];
         setIsLoadingNextObject(true);
-
         try {
             const result = await analyzeSelectedObject(
                 imageUri,
@@ -296,13 +255,13 @@ export default function LearningContentScreen() {
             );
 
             if ('error' in result) {
-                Alert.alert('Analysis Error', result.error);
+                // Fallback for error: just show modal
+                setBatchCompleteModalVisible(true);
                 setIsLoadingNextObject(false);
                 return;
             }
 
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
             navigation.replace('LearningContent', {
                 sessionId: objectSessionId || undefined,
                 objectId: nextObject.id,
@@ -322,8 +281,6 @@ export default function LearningContentScreen() {
                 currentBatchIndex: nextIndex
             });
         } catch (error) {
-            console.error('Error analyzing next object:', error);
-            Alert.alert('Error', 'Failed to analyze next object. Returning to session.');
             exitBatchMode();
         } finally {
             setIsLoadingNextObject(false);
@@ -349,24 +306,7 @@ export default function LearningContentScreen() {
 
     const handleAddToMuseum = async () => {
         if (isFromMuseum) {
-            Alert.alert('Delete Discovery', `Remove "${result.objectName}"?`, [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            const discoveryId = route.params?.discoveryId;
-                            if (discoveryId) {
-                                await removeDiscovery(discoveryId);
-                                navigation.navigate('MainTabs', { screen: 'Museum' });
-                            }
-                        } catch (error) {
-                            Alert.alert('Error', 'Failed to delete discovery');
-                        }
-                    }
-                }
-            ]);
+            setDeleteModalVisible(true);
             return;
         }
 
@@ -375,16 +315,12 @@ export default function LearningContentScreen() {
             return;
         }
 
-        // OPTIMISTIC SAVE
         try {
-            // Immediate Visual Feedback
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             setIsSaved(true);
 
-            // Heavy lifting
             const permanentImageUri = await saveImagePermanently(imageUri);
 
-            // Background Cloud Sync (Not awaited)
             addDiscovery({
                 objectName: result.objectName,
                 confidence: result.confidence,
@@ -398,11 +334,8 @@ export default function LearningContentScreen() {
                 why_it_matters_to_you: result.why_it_matters_to_you,
                 tryThis: result.tryThis,
                 explore_further: result.explore_further,
-            }).catch(err => {
-                console.error("Background sync failed:", err);
-            });
+            }).catch(err => console.error("Background sync failed:", err));
 
-            // Update Local Session
             if (objectSessionId) {
                 sessionManager.getSession(objectSessionId).then(updatedSession => {
                     if (updatedSession) {
@@ -415,29 +348,38 @@ export default function LearningContentScreen() {
                 });
             }
 
-            Alert.alert('Saved!', `"${result.objectName}" has been added to your Museum!`, [{ text: 'OK' }]);
-
+            setToastMessage(`"${result.objectName}" added to Museum!`);
+            setShowToast(true);
         } catch (error) {
             setIsSaved(false);
-            Alert.alert('Error', 'Failed to save locally.');
             console.error('Save error:', error);
+        }
+    };
+
+    const handleDeleteConfirm = async () => {
+        try {
+            const discoveryId = route.params?.discoveryId;
+            if (discoveryId) {
+                await removeDiscovery(discoveryId);
+                navigation.navigate('MainTabs', { screen: 'Museum' });
+            }
+        } catch (error) {
+            console.error('Delete error', error);
         }
     };
 
     const section = SECTIONS[currentSection];
     const rawContent = result[section.key as keyof AnalysisResult];
-    let content = 'No content available.';
-
-    if (rawContent !== undefined && rawContent !== null) {
-        if (typeof rawContent === 'string') content = rawContent;
-        else if (typeof rawContent === 'number') content = String(rawContent);
-    }
+    const formattedContent = formatAIText(
+        rawContent !== undefined && rawContent !== null
+            ? (typeof rawContent === 'string' ? rawContent : String(rawContent))
+            : 'No content available.'
+    );
 
     const progress = ((currentSection + 1) / SECTIONS.length) * 100;
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
-            {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeButton}>
                     <Ionicons name="close" size={28} color={colors.lightGray} />
@@ -462,18 +404,11 @@ export default function LearningContentScreen() {
                 </TouchableOpacity>
             </View>
 
-            {/* Progress Bar */}
             <View style={styles.progressBarContainer}>
                 <Animated.View style={[styles.progressBar, { width: `${progress}%`, backgroundColor: section.color }]} />
             </View>
 
-            <ScrollView
-                ref={scrollViewRef}
-                style={styles.scrollView}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
-            >
-                {/* Session Info Banner */}
+            <ScrollView ref={scrollViewRef} style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 {isInBatchMode && !isFromMuseum ? (
                     <View style={[styles.sessionBanner, { backgroundColor: 'rgba(138, 43, 226, 0.1)', borderColor: 'rgba(138, 43, 226, 0.3)' }]}>
                         <Ionicons name="layers" size={20} color={colors.secondary} />
@@ -504,7 +439,6 @@ export default function LearningContentScreen() {
                     </View>
                 </View>
 
-                {/* Content Card */}
                 <Animated.View style={[styles.contentCard, { opacity: fadeAnim, transform: [{ translateX: slideAnim }] }]}>
                     <View style={styles.sectionHeader}>
                         <View style={[styles.iconContainer, { backgroundColor: `${section.color}20` }]}>
@@ -516,15 +450,14 @@ export default function LearningContentScreen() {
                         </View>
                     </View>
 
-                    <Text style={styles.contentText}>{content}</Text>
+                    <Text style={styles.contentText}>{formattedContent}</Text>
 
                     <View style={styles.readingInfo}>
                         <Ionicons name="time-outline" size={16} color={colors.lightGray} />
-                        <Text style={styles.readingTime}>~{Math.ceil(content.split(' ').length / 200)} min read</Text>
+                        <Text style={styles.readingTime}>~{Math.ceil(formattedContent.split(' ').length / 200)} min read</Text>
                     </View>
                 </Animated.View>
 
-                {/* Dots */}
                 <View style={styles.dotsContainer}>
                     {SECTIONS.map((sec, index) => (
                         <TouchableOpacity key={index} onPress={() => handleDotPress(index)} activeOpacity={0.7} style={styles.dotTouchable}>
@@ -540,7 +473,6 @@ export default function LearningContentScreen() {
                     ))}
                 </View>
 
-                {/* Next Section Preview */}
                 <View style={styles.previewContainer}>
                     <Text style={styles.previewTitle}>Up Next:</Text>
                     {currentSection < SECTIONS.length - 1 && (
@@ -558,7 +490,6 @@ export default function LearningContentScreen() {
                 </View>
             </ScrollView>
 
-            {/* Bottom Nav */}
             <SafeAreaView style={styles.bottomNav} edges={['bottom']}>
                 {currentSection === SECTIONS.length - 1 ? (
                     <View style={styles.finalButtons}>
@@ -569,11 +500,7 @@ export default function LearningContentScreen() {
                                     <Text style={styles.secondaryButtonText}>New Photo</Text>
                                 </TouchableOpacity>
 
-                                <TouchableOpacity
-                                    style={[styles.primaryButtonEqual]}
-                                    onPress={handleBackToSession}
-                                    disabled={isLoadingNextObject}
-                                >
+                                <TouchableOpacity style={[styles.primaryButtonEqual]} onPress={handleBackToSession} disabled={isLoadingNextObject}>
                                     {isInBatchMode ? (
                                         <>
                                             <Text style={styles.primaryButtonText}>
@@ -604,11 +531,7 @@ export default function LearningContentScreen() {
                     </View>
                 ) : (
                     <View style={styles.navigationButtons}>
-                        <TouchableOpacity
-                            style={[styles.navButton, currentSection === 0 && styles.navButtonDisabled]}
-                            onPress={handlePrevious}
-                            disabled={currentSection === 0}
-                        >
+                        <TouchableOpacity style={[styles.navButton, currentSection === 0 && styles.navButtonDisabled]} onPress={handlePrevious} disabled={currentSection === 0}>
                             <Ionicons name="chevron-back" size={20} color={currentSection === 0 ? colors.lightGray : colors.primary} />
                             <Text style={[styles.navButtonText, currentSection === 0 && styles.navButtonTextDisabled]}>Previous</Text>
                         </TouchableOpacity>
@@ -621,7 +544,30 @@ export default function LearningContentScreen() {
                 )}
             </SafeAreaView>
 
-            {/* Overlay for Batch Loading */}
+            {/* Modals and Overlays */}
+            <Toast visible={showToast} message={toastMessage} onHide={() => setShowToast(false)} />
+
+            <CustomAlertModal
+                visible={deleteModalVisible}
+                title="Delete Discovery"
+                message={`Are you sure you want to remove "${result.objectName}" from your Museum?`}
+                type="warning"
+                confirmText="Delete"
+                onClose={() => setDeleteModalVisible(false)}
+                onConfirm={handleDeleteConfirm}
+            />
+
+            <CustomAlertModal
+                visible={batchCompleteModalVisible}
+                title="Batch Complete! 🎉"
+                message={`You've learned about all ${batchQueue.length} selected objects!`}
+                type="success"
+                confirmText="Back to Session"
+                cancelText="Stay Here"
+                onClose={() => setBatchCompleteModalVisible(false)}
+                onConfirm={() => exitBatchMode()}
+            />
+
             {isLoadingNextObject && (
                 <FactLoader message="Analyzing next object..." />
             )}

@@ -1,6 +1,6 @@
 // app/screens/ProfileScreen.tsx
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -12,7 +12,13 @@ import StatCard from '../components/gamification/StatCard';
 import ProgressBar from '../components/gamification/ProgressBar';
 import { GamificationService } from '../services/gamification';
 import { LevelProgress } from '../types/gamification';
-import AboutModal from '../components/AboutModal'; // Import the new modal
+
+// Components
+import AboutModal from '../components/AboutModal';
+import HelpSupportModal from '../components/HelpSupportModal';
+import CustomAlertModal from '../components/CustomAlertModal';
+import GradeSelectionModal from '../components/GradeSelectionModal';
+import CustomToast from '../components/CustomToast';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 
@@ -30,7 +36,25 @@ export default function ProfileScreen() {
     } = useApp();
 
     const [levelProgress, setLevelProgress] = useState<LevelProgress | null>(null);
+
+    // Modal States
     const [aboutVisible, setAboutVisible] = useState(false);
+    const [helpVisible, setHelpVisible] = useState(false);
+    const [signOutVisible, setSignOutVisible] = useState(false);
+    const [clearDataVisible, setClearDataVisible] = useState(false);
+    const [upgradeVisible, setUpgradeVisible] = useState(false);
+    const [gradeModalVisible, setGradeModalVisible] = useState(false);
+
+    // Toast State
+    const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'info' | 'error' }>({
+        visible: false,
+        message: '',
+        type: 'success',
+    });
+
+    const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
+        setToast({ visible: true, message, type });
+    };
 
     // Auto-refresh when focused
     useFocusEffect(
@@ -48,17 +72,9 @@ export default function ProfileScreen() {
         }, [user.isGuest, userStats?.user_id])
     );
 
-    const handleChangeGradeLevel = () => {
-        Alert.alert(
-            'Select Grade Level',
-            'Choose your current grade level',
-            [
-                { text: 'Elementary (K-6)', onPress: () => updateUser({ gradeLevel: 'elementary' }) },
-                { text: 'Junior High (7-10)', onPress: () => updateUser({ gradeLevel: 'juniorHigh' }) },
-                { text: 'Senior High (11-12)', onPress: () => updateUser({ gradeLevel: 'seniorHigh' }) },
-                { text: 'Cancel', style: 'cancel' }
-            ]
-        );
+    const handleGradeChange = (newGrade: any) => {
+        updateUser({ gradeLevel: newGrade });
+        showToast('Grade level updated!', 'success');
     };
 
     const getGradeLevelDisplay = () => {
@@ -69,33 +85,11 @@ export default function ProfileScreen() {
         }
     };
 
-    const handleSignOut = () => {
-        Alert.alert(
-            'Sign Out',
-            'Are you sure you want to sign out?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Sign Out',
-                    style: 'destructive',
-                    onPress: async () => {
-                        await signOut();
-                        navigation.navigate('Login' as never);
-                    }
-                }
-            ]
-        );
-    };
-
-    const handleUpgradeAccount = () => {
-        Alert.alert(
-            'Create Account',
-            'Create an account to sync your discoveries across devices and unlock exclusive features!',
-            [
-                { text: 'Maybe Later', style: 'cancel' },
-                { text: 'Create Account', onPress: () => navigation.navigate('Login' as never) }
-            ]
-        );
+    const handleClearDataConfirm = async () => {
+        await clearAllData();
+        setClearDataVisible(false);
+        showToast('All data cleared.', 'info');
+        setTimeout(() => navigation.navigate('Login' as never), 1500);
     };
 
     const unlockedAchievements = achievementProgress.filter(a => a.is_unlocked).length;
@@ -123,17 +117,18 @@ export default function ProfileScreen() {
                     </View>
                     <View style={styles.userInfo}>
                         <Text style={styles.userName}>{user.userName}</Text>
-                        <TouchableOpacity style={styles.gradeLevelButton} onPress={handleChangeGradeLevel}>
+
+                        {/* NON-CLICKABLE Grade Display */}
+                        <View style={styles.gradeLevelContainer}>
                             <Ionicons name="school-outline" size={16} color={colors.primary} />
                             <Text style={styles.gradeLevel}>{getGradeLevelDisplay()}</Text>
-                            <Ionicons name="chevron-forward" size={16} color={colors.lightGray} />
-                        </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
 
                 {/* Guest Upgrade Prompt */}
                 {user.isGuest && (
-                    <TouchableOpacity style={styles.upgradeCard} onPress={handleUpgradeAccount}>
+                    <TouchableOpacity style={styles.upgradeCard} onPress={() => setUpgradeVisible(true)}>
                         <View style={styles.upgradeIcon}>
                             <Ionicons name="rocket" size={28} color={colors.secondary} />
                         </View>
@@ -147,7 +142,7 @@ export default function ProfileScreen() {
                     </TouchableOpacity>
                 )}
 
-                {/* Level & XP Section (Only for authenticated users) */}
+                {/* Level & XP Section */}
                 {!user.isGuest && userStats && levelProgress && (
                     <View style={styles.section}>
                         <Text style={styles.sectionTitle}>Level & Experience</Text>
@@ -156,7 +151,7 @@ export default function ProfileScreen() {
                             <View style={styles.levelHeader}>
                                 <View style={styles.levelBadge}>
                                     <Ionicons name="star" size={32} color={colors.warning} />
-                                    {/* REMOVED THE NUMBER TEXT HERE */}
+                                    {/* Number removed as requested */}
                                 </View>
                                 <View style={styles.levelInfo}>
                                     <Text style={styles.levelTitle}>Level {levelProgress.current_level}</Text>
@@ -188,7 +183,6 @@ export default function ProfileScreen() {
                             value={userStats?.total_discoveries || stats.totalDiscoveries}
                             style={styles.statCard}
                         />
-
                         <StatCard
                             icon="flame"
                             iconColor={colors.warning}
@@ -197,7 +191,6 @@ export default function ProfileScreen() {
                             subtitle={`Best: ${userStats?.longest_streak || 0}`}
                             style={styles.statCard}
                         />
-
                         <StatCard
                             icon="trophy"
                             iconColor={colors.secondary}
@@ -205,7 +198,6 @@ export default function ProfileScreen() {
                             value={`${unlockedAchievements}/${totalAchievements}`}
                             style={styles.statCard}
                         />
-
                         <StatCard
                             icon="star"
                             iconColor={colors.warning}
@@ -221,7 +213,7 @@ export default function ProfileScreen() {
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Settings</Text>
 
-                    <TouchableOpacity style={styles.settingItem} onPress={handleChangeGradeLevel}>
+                    <TouchableOpacity style={styles.settingItem} onPress={() => setGradeModalVisible(true)}>
                         <View style={styles.settingLeft}>
                             <Ionicons name="school-outline" size={24} color={colors.primary} />
                             <Text style={styles.settingText}>Grade Level</Text>
@@ -232,10 +224,7 @@ export default function ProfileScreen() {
                         </View>
                     </TouchableOpacity>
 
-                    <TouchableOpacity
-                        style={styles.settingItem}
-                        onPress={() => Alert.alert('Help & Support', 'Need help? Contact us at support@siyensyago.ph')}
-                    >
+                    <TouchableOpacity style={styles.settingItem} onPress={() => setHelpVisible(true)}>
                         <View style={styles.settingLeft}>
                             <Ionicons name="help-circle-outline" size={24} color={colors.primary} />
                             <Text style={styles.settingText}>Help & Support</Text>
@@ -243,11 +232,7 @@ export default function ProfileScreen() {
                         <Ionicons name="chevron-forward" size={20} color={colors.lightGray} />
                     </TouchableOpacity>
 
-                    {/* ADDED ABOUT BUTTON */}
-                    <TouchableOpacity
-                        style={styles.settingItem}
-                        onPress={() => setAboutVisible(true)}
-                    >
+                    <TouchableOpacity style={styles.settingItem} onPress={() => setAboutVisible(true)}>
                         <View style={styles.settingLeft}>
                             <Ionicons name="information-circle-outline" size={24} color={colors.primary} />
                             <Text style={styles.settingText}>About</Text>
@@ -259,26 +244,12 @@ export default function ProfileScreen() {
                 {/* Sign Out / Delete Account */}
                 <View style={styles.section}>
                     {!user.isGuest ? (
-                        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+                        <TouchableOpacity style={styles.signOutButton} onPress={() => setSignOutVisible(true)}>
                             <Ionicons name="log-out-outline" size={24} color={colors.warning} />
                             <Text style={styles.signOutText}>Sign Out</Text>
                         </TouchableOpacity>
                     ) : (
-                        <TouchableOpacity
-                            style={styles.signOutButton}
-                            onPress={() => Alert.alert('Clear Data', 'This will remove all your discoveries. Are you sure?', [
-                                { text: 'Cancel', style: 'cancel' },
-                                {
-                                    text: 'Clear Data',
-                                    style: 'destructive',
-                                    onPress: async () => {
-                                        await clearAllData();
-                                        Alert.alert('Data Cleared', 'All your data has been removed.');
-                                        navigation.navigate('Login' as never);
-                                    }
-                                }
-                            ])}
-                        >
+                        <TouchableOpacity style={styles.signOutButton} onPress={() => setClearDataVisible(true)}>
                             <Ionicons name="trash-outline" size={24} color={colors.warning} />
                             <Text style={styles.signOutText}>Clear All Data</Text>
                         </TouchableOpacity>
@@ -286,10 +257,68 @@ export default function ProfileScreen() {
                 </View>
 
                 <Text style={styles.versionText}>Version 1.0.0</Text>
-                <View style={{ height: 80 }} />
+                <View style={{ height: 10 }} />
             </ScrollView>
 
+            {/* --- MODALS --- */}
+
             <AboutModal visible={aboutVisible} onClose={() => setAboutVisible(false)} />
+            <HelpSupportModal visible={helpVisible} onClose={() => setHelpVisible(false)} />
+
+            <GradeSelectionModal
+                visible={gradeModalVisible}
+                currentGrade={user.gradeLevel}
+                onClose={() => setGradeModalVisible(false)}
+                onSelect={handleGradeChange}
+            />
+
+            {/* Sign Out Confirmation */}
+            <CustomAlertModal
+                visible={signOutVisible}
+                title="Sign Out"
+                message="Are you sure you want to sign out?"
+                type="warning"
+                confirmText="Sign Out"
+                onClose={() => setSignOutVisible(false)}
+                onConfirm={async () => {
+                    await signOut();
+                    navigation.navigate('Login' as never);
+                }}
+            />
+
+            {/* Clear Data Confirmation */}
+            <CustomAlertModal
+                visible={clearDataVisible}
+                title="Clear Data"
+                message="This will delete all your local discoveries. This action cannot be undone."
+                type="error"
+                confirmText="Clear Everything"
+                onClose={() => setClearDataVisible(false)}
+                onConfirm={handleClearDataConfirm}
+            />
+
+            {/* Upgrade Info (Used as a modal instead of Alert) */}
+            <CustomAlertModal
+                visible={upgradeVisible}
+                title="Create Account"
+                message="Create an account to sync your discoveries across devices and unlock exclusive features!"
+                type="info"
+                confirmText="Create Account"
+                cancelText="Maybe Later"
+                onClose={() => setUpgradeVisible(false)}
+                onConfirm={() => {
+                    setUpgradeVisible(false);
+                    navigation.navigate('Login' as never);
+                }}
+            />
+
+            {/* Global Toast for Profile Actions */}
+            <CustomToast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                onHide={() => setToast(prev => ({ ...prev, visible: false }))}
+            />
         </SafeAreaView>
     );
 }
@@ -298,11 +327,10 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     scrollView: { flex: 1 },
     header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
         padding: 20,
-        paddingBottom: 10
+        paddingBottom: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(0, 191, 255, 0.1)',
     },
     headerTitle: { fontFamily: fonts.heading, fontSize: 28, color: colors.text },
 
@@ -311,6 +339,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: '#1A1C2A',
         marginHorizontal: 20,
+        marginTop: 20,
         marginBottom: 20,
         padding: 20,
         borderRadius: 20,
@@ -346,7 +375,14 @@ const styles = StyleSheet.create({
     },
     userInfo: { flex: 1, marginLeft: 15 },
     userName: { fontFamily: fonts.heading, fontSize: 20, color: colors.text, marginBottom: 8 },
-    gradeLevelButton: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+
+    // New Non-clickable style
+    gradeLevelContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        opacity: 0.8
+    },
     gradeLevel: { fontFamily: fonts.body, fontSize: 14, color: colors.primary, flex: 1 },
 
     upgradeCard: {
@@ -393,13 +429,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         position: 'relative',
         marginRight: 16
-    },
-    levelNumber: {
-        position: 'absolute',
-        fontFamily: fonts.heading,
-        fontSize: 18,
-        color: colors.warning,
-        bottom: 4
     },
     levelInfo: { flex: 1 },
     levelTitle: { fontFamily: fonts.heading, fontSize: 20, color: colors.text, marginBottom: 4 },

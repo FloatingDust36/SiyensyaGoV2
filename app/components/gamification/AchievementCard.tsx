@@ -42,11 +42,6 @@ export default function AchievementCard({ achievement, onPress }: AchievementCar
                     size={32}
                     color={isLocked ? colors.lightGray : achievement.color}
                 />
-                {achievement.is_unlocked && (
-                    <View style={[styles.tierBadge, { backgroundColor: tierColor }]}>
-                        <Ionicons name="checkmark" size={12} color="#000" />
-                    </View>
-                )}
             </View>
 
             <View style={styles.content}>

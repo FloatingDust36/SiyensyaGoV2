@@ -59,6 +59,7 @@ export type AchievementProgress = {
     current_progress: number;
     requirement_value: number;
     progress_percentage: number;
+    xp_reward: number;
 };
 
 export type LearningSession = {

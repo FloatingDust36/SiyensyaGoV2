@@ -430,8 +430,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
                     const stats = await GamificationService.getUserStats(authUser.id);
                     if (stats) {
                         await GamificationService.updateLeaderboard(authUser.id, 'all_time_xp', stats.total_xp);
-                        await GamificationService.updateLeaderboard(authUser.id, 'weekly_discoveries', stats.discoveries_this_week);
                         await GamificationService.updateLeaderboard(authUser.id, 'monthly_xp', stats.total_xp);
+                        await GamificationService.updateLeaderboard(authUser.id, 'weekly_xp', stats.total_xp);
+                        await GamificationService.updateLeaderboard(authUser.id, 'all_time_discoveries', stats.total_discoveries);
+                        await GamificationService.updateLeaderboard(authUser.id, 'weekly_discoveries', stats.discoveries_this_week);
                     }
 
                 } catch (cloudError) {

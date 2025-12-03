@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Image } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts } from '../theme/theme';
 
@@ -20,7 +20,11 @@ export default function AboutModal({ visible, onClose }: AboutModalProps) {
                         </TouchableOpacity>
                     </View>
 
-                    <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                    <ScrollView
+                        style={styles.content}
+                        contentContainerStyle={styles.scrollContent}
+                        showsVerticalScrollIndicator={false}
+                    >
                         <View style={styles.logoContainer}>
                             <View style={styles.logoPlaceholder}>
                                 <Ionicons name="scan-circle-outline" size={80} color={colors.primary} />
@@ -97,6 +101,10 @@ const styles = StyleSheet.create({
     },
     content: {
         padding: 20,
+        paddingBottom: 0,
+    },
+    scrollContent: {
+        paddingBottom: 40,
     },
     logoContainer: {
         alignItems: 'center',

@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+// app/navigation/RootNavigator.tsx
 import React, { useState, useEffect } from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { RootStackParamList } from './types';
@@ -13,6 +13,7 @@ import LearningContentScreen from '../screens/LearningContentScreen';
 import SessionSummaryScreen from '../screens/SessionSummaryScreen';
 import AchievementsScreen from '../screens/AchievementsScreen';
 import LeaderboardScreen from '../screens/LeaderboardScreen';
+import { View, StyleSheet } from 'react-native';
 import AchievementUnlockModal from '../components/gamification/AchievementUnlockModal';
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -22,10 +23,9 @@ export default function RootNavigator() {
     const [isAppReady, setIsAppReady] = useState(false);
 
     useEffect(() => {
-        // Show launch screen for a minimum time to allow hydration
         const timer = setTimeout(() => {
             setIsAppReady(true);
-        }, 2000);
+        }, 4000);
 
         return () => clearTimeout(timer);
     }, []);
@@ -39,7 +39,6 @@ export default function RootNavigator() {
         <View style={{ flex: 1 }}>
             <Stack.Navigator
                 screenOptions={{ headerShown: false }}
-                // Dynamic initial route based on user state
                 initialRouteName={
                     user.isGuest
                         ? 'Login'
@@ -49,7 +48,6 @@ export default function RootNavigator() {
                 }
             >
                 {user.isGuest ? (
-                    // GUEST / UNAUTHENTICATED ROUTES
                     <>
                         <Stack.Screen name="Login" component={LoginScreen} />
                         <Stack.Screen name="GradeLevel" component={GradeLevelScreen} />
@@ -62,7 +60,6 @@ export default function RootNavigator() {
                         <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
                     </>
                 ) : !user.hasCompletedOnboarding ? (
-                    // ONBOARDING ROUTE (Signed in but hasn't picked grade/finished setup)
                     <>
                         <Stack.Screen name="GradeLevel" component={GradeLevelScreen} />
                         <Stack.Screen name="MainTabs" component={TabNavigator} />
@@ -74,7 +71,6 @@ export default function RootNavigator() {
                         <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
                     </>
                 ) : (
-                    // MAIN APP ROUTES (Signed in & Onboarded)
                     <>
                         <Stack.Screen name="MainTabs" component={TabNavigator} />
                         <Stack.Screen name="ObjectRecognition" component={ObjectRecognitionScreen} />
@@ -86,6 +82,7 @@ export default function RootNavigator() {
                     </>
                 )}
             </Stack.Navigator>
+
             {/* GLOBAL ACHIEVEMENT MODAL */}
             <AchievementUnlockModal
                 visible={!!unlockedAchievement}
@@ -95,3 +92,12 @@ export default function RootNavigator() {
         </View>
     );
 }
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#121212',
+    },
+});

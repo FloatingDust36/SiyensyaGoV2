@@ -93,23 +93,23 @@ export const GamificationService = {
                 this.getUserStats(userId),
                 supabase.from('user_achievements').select('achievement_id').eq('user_id', userId)
             ]);
-    
+
             if (!stats) {
                 console.error("Could not fetch user stats, cannot calculate achievement progress.");
                 return [];
             }
-    
+
             if (userAchievementsResult.error) {
                 console.error("Error fetching user achievements:", userAchievementsResult.error);
                 // Decide if you want to return [] or throw the error
                 return [];
             }
-    
+
             const unlockedAchievementIds = new Set(userAchievementsResult.data?.map(ua => ua.achievement_id) || []);
-    
+
             const progressList: AchievementProgress[] = achievements.map(achievement => {
                 const isUnlocked = unlockedAchievementIds.has(achievement.id);
-    
+
                 let currentProgress = 0;
                 // Determine current progress based on the achievement's requirement type
                 switch (achievement.requirement_type) {
@@ -130,16 +130,16 @@ export const GamificationService = {
                         currentProgress = stats.total_learning_time_minutes;
                         break;
                 }
-    
+
                 // If an achievement is unlocked, its progress is considered complete.
                 // Otherwise, use the calculated current progress, capped at the requirement value.
                 const finalProgress = isUnlocked ? achievement.requirement_value : Math.min(currentProgress, achievement.requirement_value);
-                
+
                 // Calculate the progress percentage, ensuring it doesn't exceed 100%
-                const progressPercentage = achievement.requirement_value > 0 
+                const progressPercentage = achievement.requirement_value > 0
                     ? Math.min(100, (finalProgress / achievement.requirement_value) * 100)
                     : isUnlocked ? 100 : 0;
-    
+
                 return {
                     achievement_key: achievement.achievement_key,
                     name: achievement.name,
@@ -151,11 +151,12 @@ export const GamificationService = {
                     current_progress: finalProgress,
                     requirement_value: achievement.requirement_value,
                     progress_percentage: progressPercentage,
+                    xp_reward: achievement.xp_reward
                 };
             });
-    
+
             return progressList;
-    
+
         } catch (error) {
             console.error('Error calculating achievement progress:', error);
             return [];
@@ -466,7 +467,7 @@ export const GamificationService = {
 
             // Workaround: Query leaderboard_entries directly instead of using RPC
             // to avoid enum type casting issues in the database function
-            
+
             // Calculate period_key based on period
             const periodKey =
                 period === 'weekly'

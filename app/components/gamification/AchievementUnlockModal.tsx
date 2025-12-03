@@ -85,7 +85,6 @@ export default function AchievementUnlockModal({
     return (
         <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
             <View style={styles.overlay}>
-                {/* Blur Background (iOS only, graceful degradation on Android) */}
                 <View style={StyleSheet.absoluteFill}>
                     <View style={styles.blurFallback} />
                 </View>
@@ -126,7 +125,7 @@ export default function AchievementUnlockModal({
                     {/* XP Reward (if any) */}
                     <View style={styles.rewardContainer}>
                         <Ionicons name="star" size={20} color={colors.warning} />
-                        <Text style={styles.rewardText}>+{achievement.requirement_value} XP</Text>
+                        <Text style={styles.rewardText}>+{achievement.xp_reward} XP</Text>
                     </View>
 
                     {/* Close Button */}

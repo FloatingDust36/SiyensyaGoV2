@@ -1,135 +1,115 @@
-// In app/screens/LaunchScreen.tsx
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Animated } from 'react-native'; // ADDED: Animated
+// app/screens/LaunchScreen.tsx
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Animated, Easing, Image, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts } from '../theme/theme';
 
-export default function LaunchScreen({ navigation }: any) {
-    const pulseAnim = React.useRef(new Animated.Value(1)).current;
-    const rotateAnim = React.useRef(new Animated.Value(0)).current;
-    const particleAnims = React.useRef(
-        Array.from({ length: 8 }, () => ({
-            x: new Animated.Value(0),
-            y: new Animated.Value(0),
-            opacity: new Animated.Value(0),
-        }))
-    ).current;
+const { width } = Dimensions.get('window');
+
+export default function LaunchScreen() {
+    const rocketAnim = useRef(new Animated.Value(0)).current; // Float Y
+    const opacityAnim = useRef(new Animated.Value(0)).current; // Text Fade
+
+    // Ripple Animations
+    const ripple1 = useRef(new Animated.Value(0)).current;
+    const ripple2 = useRef(new Animated.Value(0)).current;
+    const ripple3 = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
-        // Pulse animation for the icon
+        // 1. Text Fade In
+        Animated.timing(opacityAnim, {
+            toValue: 1,
+            duration: 800,
+            delay: 300,
+            useNativeDriver: true,
+        }).start();
+
+        // 2. Rocket Hover (Floating)
         Animated.loop(
             Animated.sequence([
-                Animated.timing(pulseAnim, {
-                    toValue: 1.15,
+                Animated.timing(rocketAnim, {
+                    toValue: -20,
                     duration: 1500,
+                    easing: Easing.inOut(Easing.ease),
                     useNativeDriver: true,
                 }),
-                Animated.timing(pulseAnim, {
-                    toValue: 1,
+                Animated.timing(rocketAnim, {
+                    toValue: 0,
                     duration: 1500,
+                    easing: Easing.inOut(Easing.ease),
                     useNativeDriver: true,
                 }),
             ])
         ).start();
 
-        // Rotation animation for the icon
-        Animated.loop(
-            Animated.timing(rotateAnim, {
-                toValue: 1,
-                duration: 8000,
-                useNativeDriver: true,
-            })
-        ).start();
-
-        // Particle animations
-        particleAnims.forEach((particle, index) => {
-            const angle = (index / particleAnims.length) * Math.PI * 2;
-            const distance = 80;
-
-            Animated.loop(
+        // 3. Ripple Effect (Staggered)
+        const createRipple = (anim: Animated.Value, delay: number) => {
+            return Animated.loop(
                 Animated.sequence([
+                    Animated.delay(delay),
                     Animated.parallel([
-                        Animated.timing(particle.x, {
-                            toValue: Math.cos(angle) * distance,
-                            duration: 2000,
-                            useNativeDriver: true,
-                        }),
-                        Animated.timing(particle.y, {
-                            toValue: Math.sin(angle) * distance,
-                            duration: 2000,
-                            useNativeDriver: true,
-                        }),
-                        Animated.timing(particle.opacity, {
+                        Animated.timing(anim, {
                             toValue: 1,
-                            duration: 1000,
-                            useNativeDriver: true,
-                        }),
-                    ]),
-                    Animated.parallel([
-                        Animated.timing(particle.x, {
-                            toValue: 0,
                             duration: 2000,
+                            easing: Easing.out(Easing.ease),
                             useNativeDriver: true,
                         }),
-                        Animated.timing(particle.y, {
-                            toValue: 0,
-                            duration: 2000,
+                        Animated.timing(anim, {
+                            toValue: 0, // Reset purely for loop logic, opacity handles visual reset
+                            duration: 0,
                             useNativeDriver: true,
-                        }),
-                        Animated.timing(particle.opacity, {
-                            toValue: 0,
-                            duration: 1000,
-                            useNativeDriver: true,
-                        }),
-                    ]),
+                        })
+                    ])
                 ])
-            ).start();
-        });
+            );
+        };
+
+        createRipple(ripple1, 0).start();
+        createRipple(ripple2, 600).start();
+        createRipple(ripple3, 1200).start();
+
     }, []);
 
-    const spin = rotateAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['0deg', '360deg'],
+    // Helper to interpolate ripple styles
+    const getRippleStyle = (anim: Animated.Value) => ({
+        transform: [
+            { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 2.5] }) }
+        ],
+        opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
     });
 
     return (
         <SafeAreaView style={styles.container}>
-            {/* Main Content */}
-            <View style={styles.mainContent}>
-                <View style={styles.particleContainer}>
-                    {particleAnims.map((particle, index) => (
-                        <Animated.View
-                            key={index}
-                            style={[
-                                styles.particle,
-                                {
-                                    transform: [
-                                        { translateX: particle.x },
-                                        { translateY: particle.y },
-                                    ],
-                                    opacity: particle.opacity,
-                                },
-                            ]}
-                        />
-                    ))}
+            <View style={styles.content}>
+                {/* Background Ripples */}
+                <View style={styles.rippleContainer}>
+                    <Animated.View style={[styles.ripple, getRippleStyle(ripple1)]} />
+                    <Animated.View style={[styles.ripple, getRippleStyle(ripple2)]} />
+                    <Animated.View style={[styles.ripple, getRippleStyle(ripple3)]} />
                 </View>
 
+                {/* Rocket Logo */}
                 <Animated.View
                     style={{
-                        transform: [{ scale: pulseAnim }, { rotate: spin }],
+                        transform: [{ translateY: rocketAnim }]
                     }}
                 >
-                    <Ionicons name="scan-circle-outline" size={120} color={colors.primary} />
+                    <Image
+                        source={require('../../assets/adaptive-icon.png')}
+                        style={styles.logo}
+                        resizeMode="contain"
+                    />
                 </Animated.View>
 
-                <Text style={styles.title}>SiyensyaGo</Text>
-                <Text style={styles.subtitle}>Tuklasin ang Agham sa Paligid Mo.</Text>
+                {/* App Title */}
+                <Animated.View style={{ opacity: opacityAnim, alignItems: 'center', marginTop: 40 }}>
+                    <Text style={styles.title}>SiyensyaGo</Text>
+                    <Text style={styles.subtitle}>Tuklasin ang Agham.</Text>
+                </Animated.View>
             </View>
 
             <View style={styles.footer}>
-                <ActivityIndicator color={colors.primary} />
-                <Text style={styles.footerText}>Initializing Discovery Module...</Text>
+                <Text style={styles.footerText}>Initializing AI Core...</Text>
             </View>
         </SafeAreaView>
     );
@@ -138,58 +118,65 @@ export default function LaunchScreen({ navigation }: any) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.background,
-        justifyContent: 'center',
-    },
-    mainContent: {
+        backgroundColor: colors.background, // Deep Space Blue
         justifyContent: 'center',
         alignItems: 'center',
-        gap: 10,
-        marginBottom: 100,
     },
-    particleContainer: {
+    content: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 50,
+        width: '100%',
+        height: 400, // Fixed height container for centering
+    },
+    rippleContainer: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: -1,
+    },
+    ripple: {
         position: 'absolute',
         width: 200,
         height: 200,
-        justifyContent: 'center',
-        alignItems: 'center',
+        borderRadius: 100,
+        borderWidth: 2,
+        borderColor: colors.primary,
+        backgroundColor: 'rgba(0, 191, 255, 0.1)',
     },
-    particle: {
-        position: 'absolute',
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: colors.primary,
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.8,
-        shadowRadius: 4,
-        elevation: 5,
+    logo: {
+        width: 280, // Increased size as requested
+        height: 280,
+        zIndex: 10,
     },
     title: {
         fontFamily: fonts.heading,
-        color: colors.text,
         fontSize: 48,
-        letterSpacing: 2,
+        color: colors.text,
+        letterSpacing: 1.5,
+        textShadowColor: colors.primary,
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 20,
     },
     subtitle: {
         fontFamily: fonts.body,
-        color: colors.primary,
-        fontSize: 16,
+        fontSize: 18,
+        color: colors.secondary,
+        marginTop: 8,
+        letterSpacing: 2,
     },
     footer: {
         position: 'absolute',
-        bottom: 40,
-        left: 0,
-        right: 0,
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        gap: 10,
+        bottom: 50,
     },
     footerText: {
         fontFamily: fonts.body,
         color: colors.lightGray,
-        fontSize: 14,
+        fontSize: 12,
+        opacity: 0.8,
     },
 });
