@@ -1,6 +1,6 @@
-// app/screens/CameraScreen.tsx - UI RESTORED
+// app/screens/CameraScreen.tsx
 import React, { useRef, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Linking, Animated, Modal, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Linking, Animated, Modal, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions, FlashMode } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { useApp } from '../context/AppContext';
 import * as Haptics from 'expo-haptics';
+import CustomToast from '../components/CustomToast';
+import CustomAlertModal from '../components/CustomAlertModal'; // Import Alert Modal
 
 type CameraNavigationProp = StackNavigationProp<RootStackParamList, 'MainTabs'>;
 
@@ -27,11 +29,23 @@ export default function CameraScreen() {
     const [isScanning, setIsScanning] = useState(false);
     const [showHelpModal, setShowHelpModal] = useState(false);
 
+    // Toast & Modal State
+    const [showToast, setShowToast] = useState(false);
+    const [toastMessage, setToastMessage] = useState('');
+    const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('error');
+    const [showPermissionModal, setShowPermissionModal] = useState(false);
+
     // Animation refs
     const scanLineAnim = useRef(new Animated.Value(0)).current;
     const reticleGlowAnim = useRef(new Animated.Value(0)).current;
     const pulseAnim = useRef(new Animated.Value(1)).current;
     const cornerAnims = useRef(Array.from({ length: 4 }, () => new Animated.Value(0))).current;
+
+    const triggerToast = (msg: string, type: 'success' | 'error' | 'info' = 'error') => {
+        setToastMessage(msg);
+        setToastType(type);
+        setShowToast(true);
+    };
 
     useEffect(() => {
         Animated.loop(
@@ -89,7 +103,7 @@ export default function CameraScreen() {
             (navigation as any).navigate('ObjectRecognition', { imageUri: normalized.uri });
         } catch (error) {
             console.error("Error normalizing image:", error);
-            Alert.alert("Error", "Could not process image.");
+            triggerToast("Could not process image.", 'error');
         }
     };
 
@@ -103,7 +117,7 @@ export default function CameraScreen() {
                 if (photo) await processAndNavigate(photo.uri);
             } catch (error) {
                 console.error("Failed to take picture:", error);
-                Alert.alert('Error', 'Failed to capture image. Please try again.');
+                triggerToast('Failed to capture image. Please try again.', 'error');
             } finally {
                 setIsScanning(false);
             }
@@ -117,10 +131,7 @@ export default function CameraScreen() {
         try {
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert('Permission Required', 'Please grant access to your photo library.', [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Open Settings', onPress: () => Linking.openSettings() }
-                ]);
+                setShowPermissionModal(true); // Replaced Alert with Custom Modal
                 return;
             }
 
@@ -134,7 +145,7 @@ export default function CameraScreen() {
                 await processAndNavigate(result.assets[0].uri);
             }
         } catch (error) {
-            Alert.alert('Error', 'Failed to open gallery.');
+            triggerToast('Failed to open gallery.', 'error');
         }
     };
 
@@ -249,7 +260,7 @@ export default function CameraScreen() {
                 <Text style={styles.scanInstruction}>{isScanning ? 'Processing...' : 'Tap to scan and discover'}</Text>
             </View>
 
-            {/* Enhanced Help Modal */}
+            {/* Help Modal */}
             <Modal visible={showHelpModal} animationType="slide" transparent={true} onRequestClose={() => setShowHelpModal(false)}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
@@ -259,65 +270,56 @@ export default function CameraScreen() {
                                 <Ionicons name="close" size={28} color={colors.lightGray} />
                             </TouchableOpacity>
                         </View>
-
                         <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
                             <View style={styles.tipCard}>
                                 <View style={styles.tipIconContainer}>
                                     <Ionicons name="sunny-outline" size={32} color={colors.primary} />
                                 </View>
                                 <Text style={styles.tipTitle}>Good Lighting</Text>
-                                <Text style={styles.tipDescription}>
-                                    Ensure your object is well-lit. Natural daylight works best. Avoid shadows and dark areas.
-                                </Text>
+                                <Text style={styles.tipDescription}>Ensure your object is well-lit. Natural daylight works best.</Text>
                             </View>
-
                             <View style={styles.tipCard}>
                                 <View style={styles.tipIconContainer}>
                                     <Ionicons name="hand-left-outline" size={32} color={colors.primary} />
                                 </View>
                                 <Text style={styles.tipTitle}>Hold Steady</Text>
-                                <Text style={styles.tipDescription}>
-                                    Keep your phone steady when scanning. Blurry images may affect recognition accuracy.
-                                </Text>
+                                <Text style={styles.tipDescription}>Keep your phone steady when scanning. Blurry images affect recognition.</Text>
                             </View>
-
-                            <View style={styles.tipCard}>
-                                <View style={styles.tipIconContainer}>
-                                    <Ionicons name="expand-outline" size={32} color={colors.primary} />
-                                </View>
-                                <Text style={styles.tipTitle}>Frame the Object</Text>
-                                <Text style={styles.tipDescription}>
-                                    Center the object in the scanning area. Try to fill most of the frame with your subject.
-                                </Text>
-                            </View>
-
                             <View style={styles.tipCard}>
                                 <View style={styles.tipIconContainer}>
                                     <Ionicons name="eye-outline" size={32} color={colors.primary} />
                                 </View>
                                 <Text style={styles.tipTitle}>Clear View</Text>
-                                <Text style={styles.tipDescription}>
-                                    Make sure the object is clearly visible. Remove any obstructions or clutter from view.
-                                </Text>
-                            </View>
-
-                            <View style={styles.tipCard}>
-                                <View style={styles.tipIconContainer}>
-                                    <Ionicons name="navigate-outline" size={32} color={colors.primary} />
-                                </View>
-                                <Text style={styles.tipTitle}>Different Angles</Text>
-                                <Text style={styles.tipDescription}>
-                                    If recognition fails, try different angles or distances. Some objects scan better from specific views.
-                                </Text>
+                                <Text style={styles.tipDescription}>Make sure the object is clearly visible and centered.</Text>
                             </View>
                         </ScrollView>
-
                         <TouchableOpacity style={styles.modalButton} onPress={() => setShowHelpModal(false)}>
                             <Text style={styles.modalButtonText}>Got it!</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
+
+            {/* Custom Toast */}
+            <CustomToast
+                visible={showToast}
+                message={toastMessage}
+                type={toastType}
+                onHide={() => setShowToast(false)}
+            />
+
+            {/* Permission Modal */}
+            <CustomAlertModal
+                visible={showPermissionModal}
+                title="Permission Required"
+                message="Please grant access to your photo library to select an image."
+                confirmText="Open Settings"
+                cancelText="Cancel"
+                onClose={() => setShowPermissionModal(false)}
+                onConfirm={() => Linking.openSettings()}
+                type="warning"
+            />
+
         </SafeAreaView>
     );
 }

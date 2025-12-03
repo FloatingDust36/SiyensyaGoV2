@@ -8,13 +8,12 @@ import {
     TouchableOpacity,
     ScrollView,
     ActivityIndicator,
-    Alert,
     Modal
 } from 'react-native';
 import { RouteProp, useRoute, useNavigation, useIsFocused } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList, DetectedObject, SceneContext, AnalysisResult } from '../navigation/types';
+import { RootStackParamList, DetectedObject, SceneContext } from '../navigation/types';
 import { colors, fonts } from '../theme/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { analyzeSelectedObject } from '../services/gemini';
@@ -42,7 +41,7 @@ export default function DiscoverySessionScreen() {
     const [selectedObjects, setSelectedObjects] = useState<Set<string>>(new Set());
     const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-    // Modal & Toast State
+    // UI State
     const [learnConfirmVisible, setLearnConfirmVisible] = useState(false);
     const [optionsVisible, setOptionsVisible] = useState(false);
     const [tipsModalVisible, setTipsModalVisible] = useState(false);
@@ -150,15 +149,12 @@ export default function DiscoverySessionScreen() {
             );
 
             if ('error' in result) {
-                Alert.alert('Analysis Error', result.error);
+                triggerToast(result.error || 'Analysis failed');
                 setIsAnalyzing(false);
                 return;
             }
 
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-            // Cache result via useEffect in LearningContentScreen or SessionManager manually here
-            // (LearningContentScreen will handle saving to cache on mount)
 
             navigation.navigate('LearningContent', {
                 sessionId: sessionId || undefined,
@@ -182,7 +178,7 @@ export default function DiscoverySessionScreen() {
             });
             setSelectedObjects(new Set());
         } catch (error) {
-            Alert.alert('Error', 'Failed to start learning.');
+            triggerToast('Failed to start learning.');
         } finally {
             setIsAnalyzing(false);
         }
@@ -512,6 +508,7 @@ export default function DiscoverySessionScreen() {
                 ]}
             />
 
+            {/* Scanning Tips Modal */}
             <Modal
                 visible={tipsModalVisible}
                 transparent
@@ -570,6 +567,7 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 15, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0, 191, 255, 0.2)' },
     closeButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#1A1C2A', justifyContent: 'center', alignItems: 'center' },
+    helpButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#1A1C2A', justifyContent: 'center', alignItems: 'center' },
     headerCenter: { flex: 1, alignItems: 'center', paddingHorizontal: 10 },
     headerTitle: { fontFamily: fonts.heading, color: colors.text, fontSize: 18 },
     headerSubtitle: { fontFamily: fonts.body, color: colors.lightGray, fontSize: 12, marginTop: 2 },

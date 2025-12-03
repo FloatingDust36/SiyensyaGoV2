@@ -1,12 +1,13 @@
-// In app/screens/LoginScreen.tsx
+// app/screens/LoginScreen.tsx
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Animated, KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Animated, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts } from '../theme/theme';
 import { SupabaseAuth, supabase, SupabaseProfile } from '../services/supabase';
 import OTPModal from '../components/OTPModal';
 import ChangePasswordModal from '../components/ChangePasswordModal';
+import CustomToast from '../components/CustomToast';
 
 export default function LoginScreen({ navigation }: any) {
     const [isSignUp, setIsSignUp] = useState(false);
@@ -16,11 +17,21 @@ export default function LoginScreen({ navigation }: any) {
     const [fullName, setFullName] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-    const [loading, setLoading] = useState(false); // New loading state for buttons
-    const [hasNavigated, setHasNavigated] = useState(false); // Prevent duplicate navigation
+    const [loading, setLoading] = useState(false);
     const [otpVisible, setOtpVisible] = useState(false);
     const [otpType, setOtpType] = useState<'signup' | 'recovery'>('signup');
     const [changePasswordVisible, setChangePasswordVisible] = useState(false);
+
+    // Toast State
+    const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' | 'info' }>({
+        visible: false,
+        message: '',
+        type: 'success',
+    });
+
+    const showToast = (message: string, type: 'success' | 'error' | 'info' = 'error') => {
+        setToast({ visible: true, message, type });
+    };
 
     // Animation values
     const slideAnim = React.useRef(new Animated.Value(0)).current;
@@ -68,19 +79,18 @@ export default function LoginScreen({ navigation }: any) {
     const handleAuth = async () => {
         setLoading(true);
         if (isSignUp) {
-            // Sign up validation (omitted for brevity, assume validation is correct)
             if (password !== confirmPassword) {
-                Alert.alert('Error', 'Passwords do not match');
+                showToast('Passwords do not match', 'error');
                 setLoading(false);
                 return;
             }
             if (!fullName || !email || !password || !confirmPassword) {
-                Alert.alert('Error', 'Please fill in all fields');
+                showToast('Please fill in all fields', 'error');
                 setLoading(false);
                 return;
             }
             if (password.length < 6) {
-                Alert.alert('Error', 'Password must be at least 6 characters');
+                showToast('Password must be at least 6 characters', 'error');
                 setLoading(false);
                 return;
             }
@@ -92,27 +102,24 @@ export default function LoginScreen({ navigation }: any) {
                     setOtpType('signup');
                     setOtpVisible(true);
                 } else if (result.session) {
-                    // Session established (either confirmed or email verification disabled)
-                    // The useEffect listener handles navigation.
-                    Alert.alert('Success!', 'Signed up successfully!');
+                    showToast('Signed up successfully!', 'success');
                 }
             } catch (error: any) {
                 console.error('Signup error:', error);
-                Alert.alert('Sign Up Error', error.message || 'Failed to create account');
+                showToast(error.message || 'Failed to create account', 'error');
             }
         } else {
             // Sign in validation
             if (!email || !password) {
-                Alert.alert('Error', 'Please enter email and password');
+                showToast('Please enter email and password', 'error');
                 setLoading(false);
                 return;
             }
 
             try {
                 await SupabaseAuth.signIn(email, password);
-                // The useEffect listener handles navigation upon successful session creation.
             } catch (error: any) {
-                Alert.alert('Sign In Error', error.message || 'Failed to sign in');
+                showToast(error.message || 'Failed to sign in', 'error');
             }
         }
         setLoading(false);
@@ -120,7 +127,7 @@ export default function LoginScreen({ navigation }: any) {
 
     const handleForgotPassword = async () => {
         if (!email) {
-            Alert.alert('Input Required', 'Please enter your email address to reset your password.');
+            showToast('Please enter your email address to reset your password.', 'info');
             return;
         }
 
@@ -130,7 +137,7 @@ export default function LoginScreen({ navigation }: any) {
             setOtpType('recovery');
             setOtpVisible(true);
         } catch (error: any) {
-            Alert.alert('Error', error.message || 'Failed to send reset email.');
+            showToast(error.message || 'Failed to send reset email.', 'error');
         } finally {
             setLoading(false);
         }
@@ -140,17 +147,14 @@ export default function LoginScreen({ navigation }: any) {
     const handleSocialLogin = async (provider: 'google' | 'facebook' | 'apple') => {
         setLoading(true);
         try {
-            // This opens the browser. When the browser closes and the session is active, 
-            // the useEffect listener handles the navigation.
             await SupabaseAuth.signInWithOAuth(provider);
-            // Don't set loading false here - the listener will handle it after session is established
         } catch (error: any) {
             setLoading(false);
-            // This log helps distinguish a user cancel from a server error
             if (error.message.includes('cancelled')) {
                 console.log("Login cancelled by user.");
+            } else {
+                showToast(error.message || `Failed to sign in with ${provider}.`, 'error');
             }
-            Alert.alert('Error', error.message || `Failed to sign in with ${provider}.`);
         }
     };
 
@@ -169,10 +173,10 @@ export default function LoginScreen({ navigation }: any) {
                     setChangePasswordVisible(true);
                 }, 500);
             } else {
-                Alert.alert('Success', 'Email verified! You are logged in.');
+                showToast('Email verified! You are logged in.', 'success');
             }
         } catch (error: any) {
-            Alert.alert('Verification Failed', error.message || 'Invalid code');
+            showToast(error.message || 'Invalid code', 'error');
         }
     };
 
@@ -180,9 +184,9 @@ export default function LoginScreen({ navigation }: any) {
         try {
             await SupabaseAuth.updatePassword(newPassword);
             setChangePasswordVisible(false);
-            Alert.alert('Success', 'Password updated successfully!');
+            showToast('Password updated successfully!', 'success');
         } catch (error: any) {
-            Alert.alert('Update Failed', error.message || 'Could not update password');
+            showToast(error.message || 'Could not update password', 'error');
         }
     };
 
@@ -334,20 +338,6 @@ export default function LoginScreen({ navigation }: any) {
                         >
                             <Ionicons name="logo-google" size={24} color={colors.text} />
                         </TouchableOpacity>
-                        { /*<TouchableOpacity
-                            style={styles.socialButton}
-                            onPress={() => handleSocialLogin('facebook')}
-                            disabled={loading}
-                        >
-                            <Ionicons name="logo-facebook" size={24} color={colors.text} />
-                        </TouchableOpacity>
-                        { /* <TouchableOpacity
-                            style={styles.socialButton}
-                            onPress={() => handleSocialLogin('apple')}
-                            disabled={loading}
-                        >
-                            <Ionicons name="logo-apple" size={24} color={colors.text} />
-                        </TouchableOpacity>*/}
                     </View>
 
                     {/* Guest Mode */}
@@ -368,6 +358,14 @@ export default function LoginScreen({ navigation }: any) {
                         visible={changePasswordVisible}
                         onClose={() => setChangePasswordVisible(false)}
                         onSubmit={handleChangePassword}
+                    />
+
+                    {/* Global Toast */}
+                    <CustomToast
+                        visible={toast.visible}
+                        message={toast.message}
+                        type={toast.type}
+                        onHide={() => setToast(prev => ({ ...prev, visible: false }))}
                     />
                 </ScrollView>
             </KeyboardAvoidingView>

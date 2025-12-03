@@ -11,7 +11,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_GEMINI_API_KEY": "AIzaSyC6GGUEUdcd-GHXE0Y1_d_ppFC6jSjALp0",
+        "EXPO_PUBLIC_GEMINI_API_KEY": "AIzaSyDO2yVO1TP_D5Tn4mYiLFwtaPYvBszJoZ0",
         "EXPO_PUBLIC_SUPABASE_URL": "https://pyiywgwjpkrjjovwdfbw.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB5aXl3Z3dqcGtyampvdndkZmJ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk5NTcyMTUsImV4cCI6MjA3NTUzMzIxNX0.oZ4OuD9mOiI5nLtqKeLWzLp-qo-TqVu1W548CVaGgc0"
       }
