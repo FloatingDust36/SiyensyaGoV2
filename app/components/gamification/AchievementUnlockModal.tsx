@@ -43,12 +43,12 @@ export default function AchievementUnlockModal({
                     toValue: 1,
                     tension: 50,
                     friction: 7,
-                    useNativeDriver: true,
+                    useNativeDriver: false,
                 }),
                 Animated.timing(rotateAnim, {
                     toValue: 1,
                     duration: 800,
-                    useNativeDriver: true,
+                    useNativeDriver: false,
                 }),
                 Animated.loop(
                     Animated.sequence([

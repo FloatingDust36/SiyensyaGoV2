@@ -368,6 +368,7 @@ export default function LearningContentScreen() {
     };
 
     const handleAddToMuseum = async () => {
+        // Handle Deletion
         if (isFromMuseum) {
             Alert.alert('Delete Discovery', `Remove "${result.objectName}"?`, [
                 { text: 'Cancel', style: 'cancel' },
@@ -390,15 +391,25 @@ export default function LearningContentScreen() {
             return;
         }
 
+        // Handle Already Saved
         if (isSaved) {
             navigation.navigate('MainTabs', { screen: 'Museum' });
             return;
         }
 
+        // Optimistic Save
         try {
+            // Immediate Visual Feedback
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setIsSaved(true); // Turn icon green immediately
+
+            // Heavy lifting
             const permanentImageUri = await saveImagePermanently(imageUri);
 
-            await addDiscovery({
+            // Start Cloud Sync WITHOUT awaiting it for the Alert
+            // We deliberately do NOT await this promise here so the alert pops up instantly.
+            // The Context handles the cloud sync in the background.
+            addDiscovery({
                 objectName: result.objectName,
                 confidence: result.confidence,
                 category: (result.category || 'General').toLowerCase(),
@@ -411,15 +422,13 @@ export default function LearningContentScreen() {
                 why_it_matters_to_you: result.why_it_matters_to_you,
                 tryThis: result.tryThis,
                 explore_further: result.explore_further,
+            }).catch(err => {
+                console.error("Background sync failed:", err);
             });
 
-            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            setIsSaved(true);
-
-            // Update session status
+            // Update Local Session State
             if (objectSessionId) {
-                try {
-                    const updatedSession = await sessionManager.getSession(objectSessionId);
+                sessionManager.getSession(objectSessionId).then(updatedSession => {
                     if (updatedSession) {
                         const hasMore = updatedSession.exploredObjectIds.length < updatedSession.detectedObjects.length;
                         setHasMoreObjects(hasMore);
@@ -427,14 +436,14 @@ export default function LearningContentScreen() {
                             setRemainingCount(updatedSession.detectedObjects.length - updatedSession.exploredObjectIds.length);
                         }
                     }
-                } catch (error) {
-                    console.error('Error refreshing session state:', error);
-                }
+                });
             }
 
             Alert.alert('Saved!', `"${result.objectName}" has been added to your Museum!`, [{ text: 'OK' }]);
+
         } catch (error) {
-            Alert.alert('Error', 'Failed to save discovery. Please try again.');
+            setIsSaved(false); // Revert on local error
+            Alert.alert('Error', 'Failed to save locally.');
             console.error('Save error:', error);
         }
     };
