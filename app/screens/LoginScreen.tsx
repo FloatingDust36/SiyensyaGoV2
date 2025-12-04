@@ -96,6 +96,8 @@ export default function LoginScreen({ navigation }: any) {
             }
 
             try {
+                // FIXED: SupabaseAuth wrappers throw errors on failure,
+                // so we don't destructure `error` here.
                 const result = await SupabaseAuth.signUp(email, password, fullName);
 
                 if (result.user && !result.session) {
@@ -103,6 +105,7 @@ export default function LoginScreen({ navigation }: any) {
                     setOtpVisible(true);
                 } else if (result.session) {
                     showToast('Signed up successfully!', 'success');
+                    // AppContext will handle state update & navigation (to GradeLevel)
                 }
             } catch (error: any) {
                 console.error('Signup error:', error);
@@ -117,7 +120,9 @@ export default function LoginScreen({ navigation }: any) {
             }
 
             try {
+                // FIXED: Just await the call. Errors are caught in the catch block.
                 await SupabaseAuth.signIn(email, password);
+                // On success, AppContext handles navigation (to Main or GradeLevel)
             } catch (error: any) {
                 showToast(error.message || 'Failed to sign in', 'error');
             }
@@ -150,7 +155,7 @@ export default function LoginScreen({ navigation }: any) {
             await SupabaseAuth.signInWithOAuth(provider);
         } catch (error: any) {
             setLoading(false);
-            if (error.message.includes('cancelled')) {
+            if (error.message && error.message.includes('cancelled')) {
                 console.log("Login cancelled by user.");
             } else {
                 showToast(error.message || `Failed to sign in with ${provider}.`, 'error');
@@ -159,6 +164,9 @@ export default function LoginScreen({ navigation }: any) {
     };
 
     const handleGuest = () => {
+        // AppContext tracks guest user via updates
+        // Navigating here is safe; RootNavigator will likely remount 
+        // due to user state change in AppContext but manual nav works too.
         navigation.replace('GradeLevel');
     };
 

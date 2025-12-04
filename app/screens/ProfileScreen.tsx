@@ -13,7 +13,6 @@ import ProgressBar from '../components/gamification/ProgressBar';
 import { GamificationService } from '../services/gamification';
 import { LevelProgress } from '../types/gamification';
 
-// Components
 import AboutModal from '../components/AboutModal';
 import HelpSupportModal from '../components/HelpSupportModal';
 import CustomAlertModal from '../components/CustomAlertModal';
@@ -37,7 +36,6 @@ export default function ProfileScreen() {
 
     const [levelProgress, setLevelProgress] = useState<LevelProgress | null>(null);
 
-    // Modal States
     const [aboutVisible, setAboutVisible] = useState(false);
     const [helpVisible, setHelpVisible] = useState(false);
     const [signOutVisible, setSignOutVisible] = useState(false);
@@ -45,7 +43,6 @@ export default function ProfileScreen() {
     const [upgradeVisible, setUpgradeVisible] = useState(false);
     const [gradeModalVisible, setGradeModalVisible] = useState(false);
 
-    // Toast State
     const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'info' | 'error' }>({
         visible: false,
         message: '',
@@ -56,7 +53,6 @@ export default function ProfileScreen() {
         setToast({ visible: true, message, type });
     };
 
-    // Auto-refresh when focused
     useFocusEffect(
         useCallback(() => {
             const loadData = async () => {
@@ -89,7 +85,7 @@ export default function ProfileScreen() {
         await clearAllData();
         setClearDataVisible(false);
         showToast('All data cleared.', 'info');
-        setTimeout(() => navigation.navigate('Login' as never), 1500);
+        // No manual navigation needed; state update triggers RootNavigator
     };
 
     const unlockedAchievements = achievementProgress.filter(a => a.is_unlocked).length;
@@ -117,8 +113,6 @@ export default function ProfileScreen() {
                     </View>
                     <View style={styles.userInfo}>
                         <Text style={styles.userName}>{user.userName}</Text>
-
-                        {/* NON-CLICKABLE Grade Display */}
                         <View style={styles.gradeLevelContainer}>
                             <Ionicons name="school-outline" size={16} color={colors.primary} />
                             <Text style={styles.gradeLevel}>{getGradeLevelDisplay()}</Text>
@@ -151,7 +145,6 @@ export default function ProfileScreen() {
                             <View style={styles.levelHeader}>
                                 <View style={styles.levelBadge}>
                                     <Ionicons name="star" size={32} color={colors.warning} />
-                                    {/* Number removed as requested */}
                                 </View>
                                 <View style={styles.levelInfo}>
                                     <Text style={styles.levelTitle}>Level {levelProgress.current_level}</Text>
@@ -260,8 +253,6 @@ export default function ProfileScreen() {
                 <View style={{ height: 10 }} />
             </ScrollView>
 
-            {/* --- MODALS --- */}
-
             <AboutModal visible={aboutVisible} onClose={() => setAboutVisible(false)} />
             <HelpSupportModal visible={helpVisible} onClose={() => setHelpVisible(false)} />
 
@@ -272,7 +263,6 @@ export default function ProfileScreen() {
                 onSelect={handleGradeChange}
             />
 
-            {/* Sign Out Confirmation */}
             <CustomAlertModal
                 visible={signOutVisible}
                 title="Sign Out"
@@ -281,12 +271,11 @@ export default function ProfileScreen() {
                 confirmText="Sign Out"
                 onClose={() => setSignOutVisible(false)}
                 onConfirm={async () => {
+                    setSignOutVisible(false);
                     await signOut();
-                    navigation.navigate('Login' as never);
                 }}
             />
 
-            {/* Clear Data Confirmation */}
             <CustomAlertModal
                 visible={clearDataVisible}
                 title="Clear Data"
@@ -297,7 +286,6 @@ export default function ProfileScreen() {
                 onConfirm={handleClearDataConfirm}
             />
 
-            {/* Upgrade Info (Used as a modal instead of Alert) */}
             <CustomAlertModal
                 visible={upgradeVisible}
                 title="Create Account"
@@ -312,7 +300,6 @@ export default function ProfileScreen() {
                 }}
             />
 
-            {/* Global Toast for Profile Actions */}
             <CustomToast
                 visible={toast.visible}
                 message={toast.message}
@@ -375,8 +362,6 @@ const styles = StyleSheet.create({
     },
     userInfo: { flex: 1, marginLeft: 15 },
     userName: { fontFamily: fonts.heading, fontSize: 20, color: colors.text, marginBottom: 8 },
-
-    // New Non-clickable style
     gradeLevelContainer: {
         flexDirection: 'row',
         alignItems: 'center',

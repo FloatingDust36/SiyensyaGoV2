@@ -23,9 +23,10 @@ export default function RootNavigator() {
     const [isAppReady, setIsAppReady] = useState(false);
 
     useEffect(() => {
+        // Show launch screen for a minimum time for branding
         const timer = setTimeout(() => {
             setIsAppReady(true);
-        }, 4000);
+        }, 3000);
 
         return () => clearTimeout(timer);
     }, []);
@@ -39,48 +40,36 @@ export default function RootNavigator() {
         <View style={{ flex: 1 }}>
             <Stack.Navigator
                 screenOptions={{ headerShown: false }}
-                initialRouteName={
-                    user.isGuest
-                        ? 'Login'
-                        : !user.hasCompletedOnboarding
-                            ? 'GradeLevel'
-                            : 'MainTabs'
-                }
             >
-                {user.isGuest ? (
-                    <>
-                        <Stack.Screen name="Login" component={LoginScreen} />
-                        <Stack.Screen name="GradeLevel" component={GradeLevelScreen} />
-                        <Stack.Screen name="MainTabs" component={TabNavigator} />
-                        <Stack.Screen name="ObjectRecognition" component={ObjectRecognitionScreen} />
-                        <Stack.Screen name="ObjectSelection" component={DiscoverySessionScreen} />
-                        <Stack.Screen name="LearningContent" component={LearningContentScreen} />
-                        <Stack.Screen name="SessionSummary" component={SessionSummaryScreen} />
-                        <Stack.Screen name="Achievements" component={AchievementsScreen} />
-                        <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
-                    </>
-                ) : !user.hasCompletedOnboarding ? (
-                    <>
-                        <Stack.Screen name="GradeLevel" component={GradeLevelScreen} />
-                        <Stack.Screen name="MainTabs" component={TabNavigator} />
-                        <Stack.Screen name="ObjectRecognition" component={ObjectRecognitionScreen} />
-                        <Stack.Screen name="ObjectSelection" component={DiscoverySessionScreen} />
-                        <Stack.Screen name="LearningContent" component={LearningContentScreen} />
-                        <Stack.Screen name="SessionSummary" component={SessionSummaryScreen} />
-                        <Stack.Screen name="Achievements" component={AchievementsScreen} />
-                        <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
-                    </>
+                {/* LOGIC:
+                    1. If user has completed onboarding (Selected Grade) -> MainTabs
+                       (This applies to both Logged In users AND Guests)
+                    2. If not completed onboarding -> Auth/Setup Flow
+                */}
+
+                {user.hasCompletedOnboarding ? (
+                    <Stack.Screen name="MainTabs" component={TabNavigator} />
                 ) : (
-                    <>
-                        <Stack.Screen name="MainTabs" component={TabNavigator} />
-                        <Stack.Screen name="ObjectRecognition" component={ObjectRecognitionScreen} />
-                        <Stack.Screen name="ObjectSelection" component={DiscoverySessionScreen} />
-                        <Stack.Screen name="LearningContent" component={LearningContentScreen} />
-                        <Stack.Screen name="SessionSummary" component={SessionSummaryScreen} />
-                        <Stack.Screen name="Achievements" component={AchievementsScreen} />
-                        <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
-                    </>
+                    /* Setup Flow */
+                    user.isGuest ? (
+                        // Guest: Needs to Login OR Select Grade (via "Continue as Guest")
+                        <>
+                            <Stack.Screen name="Login" component={LoginScreen} />
+                            <Stack.Screen name="GradeLevel" component={GradeLevelScreen} />
+                        </>
+                    ) : (
+                        // Logged In but needs Grade Selection
+                        <Stack.Screen name="GradeLevel" component={GradeLevelScreen} />
+                    )
                 )}
+
+                {/* Common Screens available to both flows */}
+                <Stack.Screen name="ObjectRecognition" component={ObjectRecognitionScreen} />
+                <Stack.Screen name="ObjectSelection" component={DiscoverySessionScreen} />
+                <Stack.Screen name="LearningContent" component={LearningContentScreen} />
+                <Stack.Screen name="SessionSummary" component={SessionSummaryScreen} />
+                <Stack.Screen name="Achievements" component={AchievementsScreen} />
+                <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
             </Stack.Navigator>
 
             {/* GLOBAL ACHIEVEMENT MODAL */}
